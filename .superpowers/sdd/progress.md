@@ -40,3 +40,5 @@
 - M6 next: send pipeline (M6.1–M6.9) THEN author+build the send-API (per-site send keys, POST /api/v1/messages) — NOT in original plan, ~3 new tasks. Apply Addendum D click_action pre-flight in M6.1.
 - M6 engine COMPLETE (M6.1–M6.5: payload+click_action validation, idempotent enqueue, SKIP-LOCKED worker, retry/dead-letter, sweep+boot loop). Build gate PASS. Many blocking findings auto-fixed (Huawei sizing, deterministic chunk order, worker/retry). Count: 56/72.
 - M6 UI next (M6.6–M6.9). M6.6 must extract a reusable createCampaign() helper for send-API SA.3. Then send-API (SA.1–SA.4, spec at docs/superpowers/specs/2026-06-20-send-api-tasks.md), then M7, then final review.
+- M6 COMPLETE (M6.1–M6.9: send pipeline + compose/history UI + e2e). Build gate PASS. Auto-fixed M6.6/M6.7/M6.8 (preview byte count, body validation, app-scoped delivery query, NULLS LAST, etc.). Count: 60/72. 7/8 milestones (M0–M6).
+- Send-API next (SA.1–SA.4, spec docs/superpowers/specs/2026-06-20-send-api-tasks.md). SA.3 extract+reuse campaign creation from server/api/campaigns/index.post.ts. Then M7, then final review.
