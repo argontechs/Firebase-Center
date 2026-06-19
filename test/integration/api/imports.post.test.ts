@@ -109,4 +109,29 @@ describe('POST /api/apps/:id/imports', () => {
     const res = await multipartImport(csv, { sessionCookie, csrfCookie });
     expect(res.status).toBe(403);
   });
+
+  it('returns 400 when the mapping field contains malformed JSON', async () => {
+    const { default: request } = await import('supertest');
+    const { sessionCookie, csrfCookie, csrfToken } = await loginAndGetCsrf();
+    const res = await request(app.nodeListener)
+      .post(`/api/apps/${appId}/imports`)
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', [`bo_session=${sessionCookie}`, `bo_csrf=${csrfCookie}`].join('; '))
+      .set('x-csrf-token', csrfToken)
+      .attach('file', Buffer.from('tok\nT1\n', 'utf-8'), { filename: 'a.csv', contentType: 'text/csv' })
+      .field('format', 'csv')
+      .field('mapping', '{bad json');
+    expect(res.status).toBe(400);
+    expect(res.body.statusMessage ?? res.body.message ?? '').toMatch(/mapping must be valid JSON/i);
+  });
+
+  it('returns 404 when the target app does not exist', async () => {
+    const csv = 'tok,prov,plat\nT1,fcm,android\n';
+    const { sessionCookie, csrfCookie, csrfToken } = await loginAndGetCsrf();
+    const res = await multipartImport(csv, {
+      sessionCookie, csrfCookie, csrfToken,
+      id: '00000000-0000-0000-0000-000000000000',
+    });
+    expect(res.status).toBe(404);
+  });
 });
