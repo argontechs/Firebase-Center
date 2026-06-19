@@ -29,3 +29,5 @@
 - DEFERRED to a single test-hardening pass before final: M1.14 + M2.6 integration tests + the parallel-DB-contention fix (run DB tests serially/isolated).
 - Next: M2 (Sites & Apps). M2.1 label constant default = "Site".
 - M2: COMPLETE (M2.1–M2.5 Sites & Apps CRUD + UI, build gate PASS). Label default set to Site/Sites.
+- M3: COMPLETE (M3.1–M3.9: AES-256-GCM vault, write-only creds, rotation, master-key rotation, credential CSV-manifest import). Build gate PASS. Fixes: fingerprint->HMAC, rotate 400-not-500, atomic company/app upsert + UNIQUE (migration 0002), CSRF in import composable, credentials.vue import path. Tightened workflow fix-loop now acts on any Important/Critical finding regardless of reviewer verdict.
+- Count: 36/72 tasks (M0 10, M1 12, M2 5, M3 9). Deferred to test-hardening: M1.14, M2.6, M4.0 harness, M4.9, parallel-DB-contention fix.
