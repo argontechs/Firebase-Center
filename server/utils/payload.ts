@@ -1,24 +1,68 @@
-import type { NeutralMessage } from '~~/server/utils/push/types';
+import type { NeutralMessage, Provider } from '~~/server/utils/push/types';
 
 // ---------------------------------------------------------------------------
 // Payload size validation
 // ---------------------------------------------------------------------------
 
+export const MAX_PAYLOAD_BYTES = 4096;
+
 export class PayloadTooLargeError extends Error {
-  readonly code = 'PAYLOAD_TOO_LARGE';
-  constructor(message = 'Push payload exceeds the 4 KB limit') {
-    super(message);
+  readonly bytes: number;
+  readonly provider: Provider;
+  constructor(bytes: number, provider: Provider) {
+    super(`Rendered ${provider} payload is ${bytes} bytes, exceeds ${MAX_PAYLOAD_BYTES}`);
     this.name = 'PayloadTooLargeError';
+    this.bytes = bytes;
+    this.provider = provider;
   }
 }
 
 /**
- * Validates that the serialized push payload does not exceed 4 096 bytes.
- * For Huawei the token list is excluded (measured separately per batch).
+ * Renders a provider-shaped body WITHOUT the recipient/token list and measures
+ * its byte length.  Both providers cap at 4096 bytes.
+ *
+ * - FCM: `data` is a flat string->string map; token is excluded (single-message shape).
+ * - Huawei: `data` is a single JSON-encoded STRING (ref §3); token list excluded.
+ *
+ * Throws PayloadTooLargeError if the rendered body exceeds MAX_PAYLOAD_BYTES.
  */
-export function validatePayloadSize(message: NeutralMessage, _provider?: string): void {
-  const bytes = Buffer.byteLength(JSON.stringify(message), 'utf8');
-  if (bytes > 4096) throw new PayloadTooLargeError();
+function renderBodyForSizing(message: NeutralMessage, provider: Provider): unknown {
+  const notificationBlock =
+    message.mode === 'notification'
+      ? {
+          notification: {
+            title: message.title,
+            body: message.body,
+            ...(message.image ? { image: message.image } : {}),
+          },
+        }
+      : {};
+
+  if (provider === 'huawei') {
+    // Huawei: data must be a JSON-encoded string (ref §3); token list excluded.
+    return {
+      message: {
+        ...notificationBlock,
+        data: JSON.stringify(message.data ?? {}),
+      },
+    };
+  }
+
+  // FCM: data is a flat string->string map; token excluded.
+  return {
+    message: {
+      ...notificationBlock,
+      data: message.data ?? {},
+    },
+  };
+}
+
+export function validatePayloadSize(message: NeutralMessage, provider: Provider): void {
+  const body = renderBodyForSizing(message, provider);
+  const bytes = Buffer.byteLength(JSON.stringify(body), 'utf8');
+  if (bytes > MAX_PAYLOAD_BYTES) {
+    throw new PayloadTooLargeError(bytes, provider);
+  }
 }
 
 // ---------------------------------------------------------------------------
