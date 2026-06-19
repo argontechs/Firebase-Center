@@ -28,3 +28,4 @@
 - M1.1–M1.12 COMPLETE (auth core + login + user management). Build gate GREEN. Login verified live (screenshot sent).
 - DEFERRED to a single test-hardening pass before final: M1.14 + M2.6 integration tests + the parallel-DB-contention fix (run DB tests serially/isolated).
 - Next: M2 (Sites & Apps). M2.1 label constant default = "Site".
+- M2: COMPLETE (M2.1–M2.5 Sites & Apps CRUD + UI, build gate PASS). Label default set to Site/Sites.
