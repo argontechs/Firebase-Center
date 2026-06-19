@@ -151,6 +151,18 @@ export const auditLog = pgTable('audit_log', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const siteSendKeys = pgTable('site_send_keys', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').notNull().references(() => companies.id),
+  keyHash: text('key_hash').notNull(),
+  keyPrefix: text('key_prefix').notNull(),
+  version: integer('version').notNull().default(1),
+  label: text('label'),
+  createdBy: uuid('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+});
+
 // ---- M1-only extension (NOT in the Shared Contracts Registry) ----
 export const sessions = pgTable('sessions', {
   id: text('id').primaryKey(),                  // 256-bit random, base64url
