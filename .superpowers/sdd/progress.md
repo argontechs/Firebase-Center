@@ -34,3 +34,5 @@
 - M4 core COMPLETE (M4.1–M4.6: device parse/validate/upsert, import route, ingest-keys, bearer-auth POST /api/apps/:id/devices). Build gate PASS. Auto-fixed: upsert status-reset, import route 400s (malformed mapping JSON, app existence), 2 ingest-endpoint security findings.
 - Count: 42/72. Building M4.7/M4.8 (devices UI) next, then M5 (FCM+Huawei adapters).
 - TEST-HARDENING TODO (add): UI component tests assert old label "Companies"/"Company" — update to "Sites"/"Site" (display-text only; keep data-key refs). Plus M1.14, M2.6, M4.0 harness, M4.9, parallel-DB-contention.
+- M4 COMPLETE (M4.1–M4.8: devices, import, ingest keys, devices/ingest UI). Build gate PASS. Auto-fixed M4.8 CSRF fetchToken gaps. Count: 44/72. 5/8 milestones done.
+- M5 next: FCM + Huawei adapters (M5.1–M5.7). Apply Addendum D (Huawei click_action) in M5.5.
