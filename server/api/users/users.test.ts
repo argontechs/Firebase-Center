@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { db, truncate, closeDb } from '~/server/test/db';
-import { users, auditLog, sessions } from '~/server/db/schema';
-import { seedUser } from '~/server/test/auth';
-import { createSession } from '~/server/utils/auth/session';
+import { db, truncate, closeDb } from '~~/server/test/db';
+import { users, auditLog, sessions } from '~~/server/db/schema';
+import { seedUser } from '~~/server/test/auth';
+import { createSession } from '~~/server/utils/auth/session';
 
 vi.mock('h3', () => ({
   readBody: async (e: any) => e._body,
@@ -70,5 +70,34 @@ describe('admin user management', () => {
   it('create rejects a weak password (400)', async () => {
     const { e } = await adminEvt({ email: 'weak@bo.com', role: 'operator', password: 'weak' });
     await expect(createUser(e)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('disable rejects with 409 when target is the last active admin', async () => {
+    // The seeded admin IS the only admin; disabling them must be blocked.
+    const { actor, e } = await adminEvt(undefined, {});
+    e._params = { id: actor.id };
+    await expect(disableUser(e)).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('disable allows disabling an admin when another active admin exists', async () => {
+    const secondAdmin = await seedUser({ role: 'admin' });
+    const { e } = await adminEvt(undefined, { id: secondAdmin.id });
+    await disableUser(e);
+    expect(e._status).toBe(204);
+    const [row] = await db.select().from(users).where(eq(users.id, secondAdmin.id));
+    expect(row.status).toBe('disabled');
+  });
+
+  it('patch rejects with 409 when downgrading the last active admin to operator', async () => {
+    const { actor, e } = await adminEvt({ role: 'operator' }, {});
+    e._params = { id: actor.id };
+    await expect(patchUser(e)).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('patch allows downgrading an admin when another active admin exists', async () => {
+    const secondAdmin = await seedUser({ role: 'admin' });
+    const { e } = await adminEvt({ role: 'operator' }, { id: secondAdmin.id });
+    const res = await patchUser(e);
+    expect(res.role).toBe('operator');
   });
 });
