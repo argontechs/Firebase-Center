@@ -1,3 +1,3 @@
 <template>
-  <div>Firebase Center</div>
+  <NuxtPage />
 </template>

@@ -1,6 +1,6 @@
 process.env.NUXT_DATABASE_URL ??= 'postgres://fc:fc@localhost:55432/firebase_center_test';
 import { sql } from 'drizzle-orm';
-import { toNodeListener, createApp } from 'h3';
+import { toNodeListener, createApp, createRouter, eventHandler } from 'h3';
 import { db, pool } from '~/server/db/client';
 
 export { db };
@@ -24,12 +24,38 @@ export async function resetDb() {
 
 // An h3 App wired with the M1 auth handlers + guard, for black-box integration tests.
 // Later milestones extend this registry; M1 wires only what it builds.
-export function makeTestApp() {
+export async function makeTestApp() {
+  // Dynamic imports so the module graph resolves after #imports stub is in place.
+  const [
+    { default: guardMiddleware },
+    { default: loginPost },
+    { default: meGet },
+    { default: logoutPost },
+    { default: changePasswordPost },
+    { default: csrfGet },
+  ] = await Promise.all([
+    import('~/server/middleware/auth'),
+    import('~/server/api/auth/login.post'),
+    import('~/server/api/auth/me.get'),
+    import('~/server/api/auth/logout.post'),
+    import('~/server/api/auth/change-password.post'),
+    import('~/server/api/auth/csrf.get'),
+  ]);
+
   const app = createApp();
-  // Routes are registered in M1.11 once the handlers exist; kept here so M2–M6 import one factory.
+  app.use(eventHandler(guardMiddleware));   // global guard runs first
+
+  const router = createRouter();
+  router.post('/api/auth/login', eventHandler(loginPost));
+  router.get('/api/auth/me', eventHandler(meGet));
+  router.post('/api/auth/logout', eventHandler(logoutPost));
+  router.post('/api/auth/change-password', eventHandler(changePasswordPost));
+  router.get('/api/auth/csrf', eventHandler(csrfGet));
+  app.use(router);
+
   return app;
 }
 
-export const listener = (app: ReturnType<typeof makeTestApp>) => toNodeListener(app);
+export const listener = async () => toNodeListener(await makeTestApp());
 
 export async function closeDb() { await pool.end(); }
