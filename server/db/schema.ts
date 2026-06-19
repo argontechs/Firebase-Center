@@ -34,7 +34,7 @@ export const companies = pgTable('companies', {
   status: companyStatus('status').notNull().default('active'),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => ({ uqName: unique().on(t.name) }));
 
 export const apps = pgTable('apps', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -42,7 +42,7 @@ export const apps = pgTable('apps', {
   name: text('name').notNull(),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => ({ uqCompanyName: unique().on(t.companyId, t.name) }));
 
 export const appCredentials = pgTable('app_credentials', {
   id: uuid('id').defaultRandom().primaryKey(),

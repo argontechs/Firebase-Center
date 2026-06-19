@@ -116,30 +116,39 @@ function planRow(
   return { secret: row.appSecret, provider, platform, meta };
 }
 
+// Atomic upsert: INSERT … ON CONFLICT (name) DO NOTHING … RETURNING handles concurrent
+// imports without a select-then-insert race that could produce duplicate company rows.
+// Requires UNIQUE constraint on companies.name (migration 0002).
 async function upsertCompanyByName(name: string): Promise<string> {
+  const inserted = await db
+    .insert(companies)
+    .values({ name })
+    .onConflictDoNothing({ target: companies.name })
+    .returning({ id: companies.id });
+  if (inserted.length > 0) return inserted[0].id;
+  // Row already existed — fetch it.
   const [existing] = await db
     .select({ id: companies.id })
     .from(companies)
     .where(eq(companies.name, name));
-  if (existing) return existing.id;
-  const [row] = await db
-    .insert(companies)
-    .values({ name })
-    .returning({ id: companies.id });
-  return row.id;
+  return existing.id;
 }
 
+// Atomic upsert keyed by (company_id, name). Requires UNIQUE constraint on
+// apps.(company_id, name) (migration 0002).
 async function upsertAppByName(companyId: string, name: string): Promise<string> {
+  const inserted = await db
+    .insert(apps)
+    .values({ companyId, name })
+    .onConflictDoNothing({ target: [apps.companyId, apps.name] })
+    .returning({ id: apps.id });
+  if (inserted.length > 0) return inserted[0].id;
+  // Row already existed — fetch it.
   const [existing] = await db
     .select({ id: apps.id })
     .from(apps)
     .where(and(eq(apps.companyId, companyId), eq(apps.name, name)));
-  if (existing) return existing.id;
-  const [row] = await db
-    .insert(apps)
-    .values({ companyId, name })
-    .returning({ id: apps.id });
-  return row.id;
+  return existing.id;
 }
 
 // Validates + upserts company→app→app_credentials for every manifest row.
