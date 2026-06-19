@@ -1,4 +1,4 @@
-import type { appCredentials } from '~/server/db/schema';
+import type { appCredentials } from '~~/server/db/schema';
 
 type CredentialRow = typeof appCredentials.$inferSelect;
 

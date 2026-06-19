@@ -46,4 +46,57 @@ describe('CredentialsPage', () => {
     // secret input cleared after save (write-only)
     expect((wrapper.get('[data-test="secret-input"]').element as HTMLTextAreaElement).value).toBe('');
   });
+
+  it('rotate opens a write-only textarea panel (never pre-filled) and POSTs to rotate endpoint after confirm', async () => {
+    const wrapper = mount(CredentialsPage);
+    await flushPromises();
+
+    // Rotate panel is hidden before clicking Rotate
+    expect(wrapper.find('[data-test="rotate-panel"]').exists()).toBe(false);
+
+    // Click Rotate for credential c1
+    await wrapper.get('[data-test="rotate-c1"]').trigger('click');
+    await flushPromises();
+
+    // Rotate panel is now visible
+    expect(wrapper.find('[data-test="rotate-panel"]').exists()).toBe(true);
+
+    // Write-only textarea must start empty (never pre-filled from server)
+    const rotateInput = wrapper.get('[data-test="rotate-secret-input"]');
+    expect((rotateInput.element as HTMLTextAreaElement).value).toBe('');
+
+    // Enter the new secret and confirm
+    await rotateInput.setValue('new-secret-xyz');
+    await wrapper.get('[data-test="rotate-confirm-btn"]').trigger('click');
+    await flushPromises();
+
+    const fetchMock = globalThis.$fetch as ReturnType<typeof vi.fn>;
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/apps/a1/credentials/c1/rotate',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    // Rotate panel dismissed and rotate-secret-input cleared after submit (write-only)
+    expect(wrapper.find('[data-test="rotate-panel"]').exists()).toBe(false);
+  });
+
+  it('rotate cancel closes the panel without POSTing', async () => {
+    const wrapper = mount(CredentialsPage);
+    await flushPromises();
+
+    await wrapper.get('[data-test="rotate-c1"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-test="rotate-panel"]').exists()).toBe(true);
+
+    await wrapper.get('[data-test="rotate-cancel-btn"]').trigger('click');
+    await flushPromises();
+
+    // Panel closed, no rotate POST made
+    expect(wrapper.find('[data-test="rotate-panel"]').exists()).toBe(false);
+    const fetchMock = globalThis.$fetch as ReturnType<typeof vi.fn>;
+    const rotateCalls = (fetchMock.mock.calls as [string, ...unknown[]][]).filter(
+      ([url]) => typeof url === 'string' && url.includes('/rotate'),
+    );
+    expect(rotateCalls).toHaveLength(0);
+  });
 });

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { useCredentials } from '~/app/composables/useCredentials';
+import { useCredentials } from '~~/app/composables/useCredentials';
 
 defineOptions({ name: 'CredentialsPage' });
 
@@ -14,6 +14,10 @@ const platform = ref<'ios' | 'android' | 'huawei' | 'web' | 'any'>('android');
 const label = ref('');
 const secret = ref('');          // write-only: never hydrated from server, cleared after save
 const lastFingerprint = ref<string | null>(null);
+
+// Rotate panel state — write-only, never pre-filled from server
+const rotatingId = ref<string | null>(null);
+const rotateSecret = ref('');   // write-only: cleared after rotate
 
 async function reload() {
   credentials.value = await fetchList();
@@ -32,11 +36,22 @@ async function onSave() {
   await reload();
 }
 
-async function onRotate(cid: string) {
-  const next = window.prompt('Paste the NEW secret (write-only):');
-  if (!next) return;
-  const meta = await rotate(cid, { secret: next });
+function openRotate(cid: string) {
+  rotatingId.value = cid;
+  rotateSecret.value = '';       // always start empty — write-only guarantee
+}
+
+function cancelRotate() {
+  rotatingId.value = null;
+  rotateSecret.value = '';
+}
+
+async function onRotate() {
+  if (!rotatingId.value || !rotateSecret.value) return;
+  const meta = await rotate(rotatingId.value, { secret: rotateSecret.value });
   lastFingerprint.value = meta.fingerprint;
+  rotateSecret.value = '';       // clear after submit — write-only
+  rotatingId.value = null;
   await reload();
 }
 
@@ -67,11 +82,23 @@ onMounted(reload);
             <span v-else data-test="badge-not-ready">Not ready</span>
           </td>
           <td>
-            <button type="button" :data-test="`rotate-${c.id}`" @click="onRotate(c.id)">Rotate</button>
+            <button type="button" :data-test="`rotate-${c.id}`" @click="openRotate(c.id)">Rotate</button>
           </td>
         </tr>
       </tbody>
     </table>
+
+    <!-- Rotate panel: write-only textarea, never pre-filled from server -->
+    <div v-if="rotatingId" data-test="rotate-panel">
+      <h2>Rotate secret (write-only)</h2>
+      <textarea
+        v-model="rotateSecret"
+        data-test="rotate-secret-input"
+        placeholder="Paste new secret — never shown again"
+      ></textarea>
+      <button type="button" data-test="rotate-confirm-btn" @click="onRotate">Confirm Rotate</button>
+      <button type="button" data-test="rotate-cancel-btn" @click="cancelRotate">Cancel</button>
+    </div>
 
     <h2>Add credential (write-only)</h2>
     <p v-if="lastFingerprint" data-test="last-fingerprint">Saved. Fingerprint: {{ lastFingerprint }}</p>
