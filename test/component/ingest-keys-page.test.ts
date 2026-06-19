@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { mountSuspended, flushPromises } from '@nuxt/test-utils/runtime';
 
 const FAKE_CSRF = 'test-csrf-token-ik';
 
@@ -35,7 +35,7 @@ const { default: IngestKeysPage } = await import('~/app/pages/apps/[id]/ingest-k
 
 describe('ingest keys page', () => {
   it('shows the full key exactly once after issuing', async () => {
-    const w = mount(IngestKeysPage);
+    const w = await mountSuspended(IngestKeysPage);
     await flushPromises();
 
     await w.get('[data-testid="issue-key"]').trigger('click');
@@ -45,7 +45,7 @@ describe('ingest keys page', () => {
   });
 
   it('lists issued keys by prefix only (never the full secret)', async () => {
-    const w = mount(IngestKeysPage);
+    const w = await mountSuspended(IngestKeysPage);
     await flushPromises();
 
     await w.get('[data-testid="issue-key"]').trigger('click');

@@ -5,8 +5,9 @@ defineOptions({ name: 'IngestKeysPage' });
 
 const route = useRoute();
 const appId = computed(() => String(route.params.id));
-// useCsrf is auto-imported by Nuxt; in tests it is stubbed as a global via vi.stubGlobal.
-const { token } = useCsrf();
+// useCsrf is auto-imported by Nuxt; fetchToken() is called before each mutating fetch
+// to match the project CSRF convention (same pattern as login.vue and useCredentialImport.ts).
+const csrf = useCsrf();
 
 interface KeyMeta {
   id: string;
@@ -20,36 +21,35 @@ interface KeyMeta {
 const keys = ref<KeyMeta[]>([]);
 const showOnceKey = ref<string | null>(null);
 
-function csrfHeaders() {
-  return { 'x-csrf-token': token.value };
-}
-
 async function refresh() {
   keys.value = await $fetch(`/api/apps/${appId.value}/ingest-keys`);
 }
 
 async function issueKey() {
+  await csrf.fetchToken();
   const res: { key: string; id: string; prefix: string; version: number } = await $fetch(
     `/api/apps/${appId.value}/ingest-keys`,
-    { method: 'POST', headers: csrfHeaders(), body: {} },
+    { method: 'POST', headers: csrf.headers(), body: {} },
   );
   showOnceKey.value = res.key;
   await refresh();
 }
 
 async function rotateKey(id: string) {
+  await csrf.fetchToken();
   const res: { key: string; id: string; prefix: string; version: number } = await $fetch(
     `/api/apps/${appId.value}/ingest-keys/${id}/rotate`,
-    { method: 'POST', headers: csrfHeaders() },
+    { method: 'POST', headers: csrf.headers() },
   );
   showOnceKey.value = res.key;
   await refresh();
 }
 
 async function revokeKey(id: string) {
+  await csrf.fetchToken();
   await $fetch(`/api/apps/${appId.value}/ingest-keys/${id}/revoke`, {
     method: 'POST',
-    headers: csrfHeaders(),
+    headers: csrf.headers(),
   });
   await refresh();
 }

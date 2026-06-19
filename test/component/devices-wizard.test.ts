@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { mountSuspended, flushPromises } from '@nuxt/test-utils/runtime';
 
 const FAKE_CSRF = 'test-csrf-token-dev';
 
@@ -23,14 +23,14 @@ const { default: DevicesPage } = await import('~/app/pages/apps/[id]/devices.vue
 
 describe('devices import wizard', () => {
   it('starts on the upload step', async () => {
-    const w = mount(DevicesPage);
+    const w = await mountSuspended(DevicesPage);
     await flushPromises();
     expect(w.find('[data-testid="step-upload"]').exists()).toBe(true);
     expect(w.find('[data-testid="step-map"]').exists()).toBe(false);
   });
 
   it('advances to the mapping step after a file is chosen', async () => {
-    const w = mount(DevicesPage);
+    const w = await mountSuspended(DevicesPage);
     await flushPromises();
 
     const file = new File(['tok,prov,plat\nT1,fcm,android\n'], 'a.csv', { type: 'text/csv' });
@@ -44,7 +44,7 @@ describe('devices import wizard', () => {
   });
 
   it('shows the failed count on the results step after submit', async () => {
-    const w = mount(DevicesPage);
+    const w = await mountSuspended(DevicesPage);
     await flushPromises();
 
     const file = new File(['tok,prov,plat\nT1,fcm,android\n'], 'a.csv', { type: 'text/csv' });

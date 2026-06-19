@@ -6,7 +6,9 @@ defineOptions({ name: 'DevicesPage' });
 const route = useRoute();
 const appId = computed(() => String(route.params.id));
 // useCsrf is auto-imported by Nuxt; in tests it is stubbed as a global via vi.stubGlobal.
-const { token } = useCsrf();
+// fetchToken() is called before the first mutating fetch to match the project CSRF convention
+// (same pattern as login.vue and useCredentialImport.ts).
+const csrf = useCsrf();
 
 type Step = 'upload' | 'map' | 'results';
 const step = ref<Step>('upload');
@@ -28,6 +30,7 @@ async function onFileChosen(e: Event) {
 
 async function runImport() {
   if (!file.value) return;
+  await csrf.fetchToken();
   const fd = new FormData();
   fd.set('file', file.value, file.value.name);
   fd.set('format', file.value.name.endsWith('.json') ? 'json' : 'csv');
@@ -37,7 +40,7 @@ async function runImport() {
   result.value = await $fetch(`/api/apps/${appId.value}/imports`, {
     method: 'POST',
     body: fd,
-    headers: { 'x-csrf-token': token.value },
+    headers: csrf.headers(),
   });
   step.value = 'results';
 }
