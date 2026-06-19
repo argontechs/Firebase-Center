@@ -9,3 +9,4 @@
 
 ## Tasks completed
 (none yet)
+- Task M0.1: complete (commit b4c0eac — Nuxt 4 + Nitro scaffold, vitest 2/2)
