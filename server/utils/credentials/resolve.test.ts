@@ -1,93 +1,161 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * resolve.test.ts
+ *
+ * Test DB: pg-mem (in-memory Postgres).  A Drizzle pg instance is built over
+ * pg-mem and the app_credentials table is created before the first test runs.
+ * This exercises real SQL (real WHERE/AND/EQ evaluation) instead of the
+ * hand-rolled Drizzle-AST-parsing stub that the spec explicitly rejected.
+ */
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 
-// Mock crypto so the test never needs BO_MASTER_KEY.
-// decryptSecret returns the JSON we encoded as the ciphertext field.
-vi.mock('~~/server/utils/crypto', () => ({
-  decryptSecret: (enc: { ciphertext: string }) => Buffer.from(enc.ciphertext, 'base64').toString('utf8'),
-}));
+// ---------------------------------------------------------------------------
+// pg-mem compat layer
+// ---------------------------------------------------------------------------
+/**
+ * Drizzle's node-postgres driver passes `types: { getTypeParser }` and
+ * `rowMode: 'array'` in every query config object.  pg-mem v3 rejects both.
+ * This factory returns a Pool-compatible proxy that:
+ *  1. strips `types` and `rowMode` before forwarding to pg-mem, and
+ *  2. when `rowMode` was `'array'`, converts the keyed-object rows pg-mem
+ *     returns back to the positional arrays Drizzle's mapResultRow expects.
+ */
+function makePgMemCompatPool(raw: { query: Function }) {
+  function extractSelectColumns(sql: string): string[] {
+    const m = sql.match(/^select (.+?) from /i);
+    if (!m) return [];
+    return m[1].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+  }
 
-// ---- In-memory DB mock for resolveCredential --------------------------------
-// We keep a mutable array of rows and swap the `db.select()…where()` chain so
-// it filters synchronously — no real Postgres connection required.
-type FakeRow = {
-  id: string;
-  appId: string;
-  provider: string;
-  platform: string;
-  label: string | null;
-  secretCiphertext: string;
-  secretNonce: string;
-  secretTag: string;
-  keyVersion: number;
-  metaJsonb: Record<string, unknown>;
-  configuredAt: Date;
-  rotatedAt: Date | null;
-};
-
-let store: FakeRow[] = [];
-
-vi.mock('~~/server/db/client', () => {
-  // Minimal Drizzle-compatible query builder stub.
-  const makeQuery = (rows: FakeRow[]) => ({
-    from: () => ({
-      where: (_cond: unknown) => {
-        // The condition is opaque at this level; we let the real filter happen via
-        // a closure over the predicate values injected by each test through `seed()`.
-        // Because resolveCredential always does and(eq(appId), eq(provider)), we
-        // resolve by re-executing against the mutable `store` array at await time.
-        return Promise.resolve(rows);
-      },
-    }),
+  return new Proxy(raw, {
+    get(target, prop) {
+      if (prop !== 'query') return Reflect.get(target, prop);
+      return async function (queryOrText: unknown, params?: unknown[]) {
+        let originalRowMode: string | null = null;
+        let sqlText = '';
+        let q: unknown = queryOrText;
+        if (q && typeof q === 'object') {
+          const { types: _types, rowMode, ...rest } = q as Record<string, unknown>;
+          originalRowMode = (rowMode as string) ?? null;
+          sqlText = (rest.text as string) ?? '';
+          q = rest;
+        }
+        const result = await (target as { query: Function }).query(q, params);
+        if (originalRowMode === 'array' && result && Array.isArray(result.rows)) {
+          const cols = extractSelectColumns(sqlText);
+          result.rows = (result.rows as unknown[]).map((row) => {
+            if (Array.isArray(row)) return row;
+            const r = row as Record<string, unknown>;
+            return cols.map((col) => {
+              const v = r[col];
+              // pg-mem returns jsonb columns as JSON strings — parse them so
+              // Drizzle receives proper objects.
+              if (col.includes('json') && typeof v === 'string') {
+                try { return JSON.parse(v); } catch { return v; }
+              }
+              return v;
+            });
+          });
+        }
+        return result;
+      };
+    },
   });
-
-  // We intercept at the module level by returning a proxy `db` that captures the
-  // Drizzle `.select().from().where()` call and evaluates against `store` at resolve time.
-  const db = {
-    select: () => ({
-      from: (table: unknown) => ({
-        where: (cond: unknown) => {
-          // Evaluate the and(eq(appId,…), eq(provider,…)) condition by extracting
-          // the SQL parameters from the Drizzle condition object's `values` list.
-          // Drizzle's eq() builds a SQL template; we read the right-hand values.
-          // The condition tree for and(eq(col,v1), eq(col,v2)) has:
-          //   cond.sql → 'X.app_id = $1 and X.provider = $2'
-          //   cond.values / queryChunks[n].value → the bound params
-          // Instead of parsing the AST we use a simpler approach: replay the two
-          // bound params in insertion order.
-          const params = extractParams(cond);
-          return Promise.resolve(store.filter((r) => {
-            // params[0] = appId, params[1] = provider
-            return r.appId === params[0] && r.provider === params[1];
-          }));
-        },
-      }),
-    }),
-  };
-
-  return { db };
-});
-
-// Recursively collect leaf `value` nodes from a Drizzle SQL chunk tree.
-function extractParams(node: unknown): string[] {
-  if (node == null || typeof node !== 'object') return [];
-  const n = node as Record<string, unknown>;
-  // Drizzle SQL value chunk: { value, encoder }
-  if ('value' in n && 'encoder' in n) return [String(n.value)];
-  // Drizzle AND: { sql: SQLWrapper[], … } or { queryChunks: [...] }
-  const out: string[] = [];
-  if (Array.isArray(n['queryChunks'])) {
-    for (const chunk of n['queryChunks'] as unknown[]) out.push(...extractParams(chunk));
-  }
-  if (Array.isArray(n['sql'])) {
-    for (const chunk of n['sql'] as unknown[]) out.push(...extractParams(chunk));
-  }
-  return out;
 }
 
-// ---- Import after mocks -------------------------------------------------------
-import { isReady, resolveCredential } from './resolve';
-import type { appCredentials } from '~~/server/db/schema';
+// ---------------------------------------------------------------------------
+// Shared pg-mem state — populated by setupPgMem(), called from beforeAll.
+// We use var so declarations are hoisted past the temporal-dead-zone issues
+// that vi.mock's factory hoisting creates with let/const.
+// ---------------------------------------------------------------------------
+// eslint-disable-next-line no-var
+var _rawPool: { query: Function } | null = null;
+// eslint-disable-next-line no-var
+var _memDb: unknown = null;
 
+async function setupPgMem() {
+  if (_memDb) return; // already initialised
+
+  const { newDb } = await import('pg-mem');
+  const { drizzle } = await import('drizzle-orm/node-postgres');
+
+  const mem = newDb();
+  const { Pool } = mem.adapters.createPg();
+  const raw = new Pool();
+  _rawPool = raw;
+
+  const compatPool = makePgMemCompatPool(raw);
+
+  // DDL: only the columns resolve.ts queries.
+  // Note: we omit DEFAULT gen_random_uuid() because pg-mem v3 evaluates DEFAULT
+  // expressions once and caches the result, causing duplicate-key errors when
+  // multiple rows are inserted.  Instead, seed() provides explicit UUIDs.
+  await raw.query(`CREATE TYPE provider     AS ENUM ('fcm','huawei')`);
+  await raw.query(`CREATE TYPE cred_platform AS ENUM ('ios','android','huawei','web','any')`);
+  await raw.query(`
+    CREATE TABLE app_credentials (
+      id                uuid          PRIMARY KEY,
+      app_id            uuid          NOT NULL,
+      provider          provider      NOT NULL,
+      platform          cred_platform NOT NULL,
+      label             text,
+      secret_ciphertext text          NOT NULL,
+      secret_nonce      text          NOT NULL,
+      secret_tag        text          NOT NULL,
+      key_version       integer       NOT NULL DEFAULT 1,
+      meta_jsonb        jsonb         NOT NULL DEFAULT '{}',
+      configured_at     timestamptz   NOT NULL DEFAULT now(),
+      rotated_at        timestamptz
+    )
+  `);
+
+  _memDb = drizzle(compatPool as unknown as Parameters<typeof drizzle>[0]);
+}
+
+// ---------------------------------------------------------------------------
+// Mocks — must be declared before any imports of the mocked modules.
+// Using vi.doMock (not vi.mock) so the factory is NOT hoisted; we can safely
+// reference _memDb here because the factory runs lazily at the first import.
+// We then use dynamic import for the modules under test.
+// ---------------------------------------------------------------------------
+vi.doMock('~~/server/utils/crypto', () => ({
+  decryptSecret: (enc: { ciphertext: string }) =>
+    Buffer.from(enc.ciphertext, 'base64').toString('utf8'),
+}));
+
+vi.doMock('~~/server/db/client', async () => {
+  await setupPgMem();
+  return { db: _memDb };
+});
+
+// ---------------------------------------------------------------------------
+// Lazily imported module under test (after doMock registrations).
+// ---------------------------------------------------------------------------
+let isReady: (row: unknown) => boolean;
+let resolveCredential: (
+  appId: string,
+  provider: 'fcm' | 'huawei',
+  platform: string,
+) => Promise<
+  | { ready: true; credential: { provider: string; platform: string; secret: unknown; meta: unknown } }
+  | { ready: false; reason: string }
+>;
+
+beforeAll(async () => {
+  await setupPgMem();
+  // Dynamic import picks up the doMock registrations above.
+  const mod = await import('./resolve');
+  isReady = mod.isReady as typeof isReady;
+  resolveCredential = mod.resolveCredential as typeof resolveCredential;
+});
+
+beforeEach(async () => {
+  if (_rawPool) await _rawPool.query('DELETE FROM app_credentials');
+});
+
+// ---------------------------------------------------------------------------
+// Type helpers
+// ---------------------------------------------------------------------------
+import type { appCredentials } from '~~/server/db/schema';
 type Row = typeof appCredentials.$inferSelect;
 
 function baseRow(over: Partial<Row>): Row {
@@ -108,14 +176,31 @@ function baseRow(over: Partial<Row>): Row {
   } as Row;
 }
 
-function seedRow(row: Partial<Row> & { appId: string; provider: string; platform: string }) {
-  store.push(baseRow(row) as unknown as FakeRow);
+/** Insert a credential row directly via raw SQL (no Drizzle foreign-key refs needed). */
+async function seed(over: {
+  appId: string;
+  provider: string;
+  platform: string;
+  secretCiphertext?: string;
+  metaJsonb?: Record<string, unknown>;
+}) {
+  if (!_rawPool) throw new Error('pg-mem not initialised');
+  // Provide an explicit id: pg-mem v3 caches DEFAULT expression results across
+  // inserts, so DEFAULT gen_random_uuid() would produce duplicate PKs.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const id = require('crypto').randomUUID() as string;
+  const enc = over.secretCiphertext ?? Buffer.from('{}').toString('base64');
+  const meta = JSON.stringify(over.metaJsonb ?? {});
+  await _rawPool.query(
+    `INSERT INTO app_credentials
+       (id, app_id, provider, platform, secret_ciphertext, secret_nonce, secret_tag, meta_jsonb)
+     VALUES ($1, $2, $3, $4, $5, 'AA==', 'AA==', $6)`,
+    [id, over.appId, over.provider, over.platform, enc, meta],
+  );
 }
 
-beforeEach(() => { store = []; });
-
 // =============================================================================
-// isReady
+// isReady — pure function, no DB
 // =============================================================================
 describe('isReady', () => {
   it('FCM android: ready when row exists (SA JSON alone authorizes sending)', () => {
@@ -152,7 +237,7 @@ describe('isReady', () => {
 });
 
 // =============================================================================
-// resolveCredential
+// resolveCredential — exercises real SQL via pg-mem
 // =============================================================================
 describe('resolveCredential', () => {
   const APP = '11111111-1111-1111-1111-111111111111';
@@ -163,7 +248,7 @@ describe('resolveCredential', () => {
   });
 
   it('matches the exact platform row and decrypts the secret', async () => {
-    seedRow({
+    await seed({
       appId: APP,
       provider: 'fcm',
       platform: 'android',
@@ -180,7 +265,7 @@ describe('resolveCredential', () => {
   });
 
   it("falls back to platform='any' row and exposes Huawei secret shape + meta", async () => {
-    seedRow({
+    await seed({
       appId: APP,
       provider: 'huawei',
       platform: 'any',
@@ -199,7 +284,7 @@ describe('resolveCredential', () => {
   });
 
   it('returns NOT_READY when the matching row is not ready (FCM ios without apns flag)', async () => {
-    seedRow({
+    await seed({
       appId: APP,
       provider: 'fcm',
       platform: 'ios',
@@ -211,15 +296,14 @@ describe('resolveCredential', () => {
   });
 
   it('prefers exact platform match over any-platform fallback', async () => {
-    // Insert both an 'any' and an exact 'android' row; the android row must win.
-    seedRow({
+    await seed({
       appId: APP,
       provider: 'fcm',
       platform: 'any',
       secretCiphertext: Buffer.from(JSON.stringify({ project_id: 'fallback' })).toString('base64'),
       metaJsonb: {},
     });
-    seedRow({
+    await seed({
       appId: APP,
       provider: 'fcm',
       platform: 'android',
