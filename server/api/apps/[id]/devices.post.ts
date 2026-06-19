@@ -8,9 +8,13 @@ import { upsertDevices } from '~~/server/utils/import/upsert';
 import { rateLimit } from '~~/server/utils/rate-limit';
 
 // Per-key / per-IP sliding-window limit.
-// Override via INGEST_RATE_LIMIT env var (useful in tests to set a small value).
-const INGEST_LIMIT = Number(process.env.INGEST_RATE_LIMIT ?? 600);
+// Read at request time (not module-load time) so that INGEST_RATE_LIMIT set
+// before the first import in tests is honoured even if this module was cached
+// by a prior test run in the same Vitest worker.
 const WINDOW_MS = 60_000;
+function ingestLimit(): number {
+  return Number(process.env.INGEST_RATE_LIMIT ?? 600);
+}
 
 export default defineEventHandler(async (event) => {
   const appId = getRouterParam(event, 'id')!;
@@ -18,10 +22,12 @@ export default defineEventHandler(async (event) => {
   // Bearer-key auth: 401 for missing/invalid key, 403 for wrong-app key.
   const ctx = await authenticateIngest(event, appId);
 
-  // Per-key sliding-window rate limit
+  // Per-key sliding-window rate limit (limit read at request time so test env
+  // overrides via INGEST_RATE_LIMIT take effect even with a cached module).
+  const limit = ingestLimit();
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown';
-  rateLimit(`ingest:key:${ctx.keyId}`, INGEST_LIMIT, WINDOW_MS);
-  rateLimit(`ingest:ip:${ip}`, INGEST_LIMIT, WINDOW_MS);
+  rateLimit(`ingest:key:${ctx.keyId}`, limit, WINDOW_MS);
+  rateLimit(`ingest:ip:${ip}`, limit, WINDOW_MS);
 
   const raw = await readBody<Record<string, unknown>>(event);
 
