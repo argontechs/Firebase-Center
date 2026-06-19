@@ -1,5 +1,5 @@
 import { defineEventHandler, getRouterParam, createError } from 'h3';
-import { eq, desc } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db/client';
 import { campaigns, deliveries } from '~~/server/db/schema';
 import { requireSession } from '~~/server/utils/auth/guard';
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
 
   const dels = await db.select().from(deliveries)
     .where(eq(deliveries.campaignId, id))
-    .orderBy(desc(deliveries.sentAt));
+    .orderBy(sql`${deliveries.sentAt} DESC NULLS LAST`);
 
   return { campaign, deliveries: dels };
 });

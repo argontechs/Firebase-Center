@@ -1,5 +1,5 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc, inArray } from 'drizzle-orm';
 import { db } from '~~/server/db/client';
 import { campaigns, deliveries } from '~~/server/db/schema';
 import { requireSession } from '~~/server/utils/auth/guard';
@@ -33,7 +33,9 @@ export default defineEventHandler(async (event) => {
     invalid: sql<number>`count(*) filter (where ${deliveries.status} = 'invalid')`,
     gaveUp: sql<number>`count(*) filter (where ${deliveries.status} = 'gave_up')`,
     notReady: sql<number>`count(*) filter (where ${deliveries.disposition} = 'CREDENTIAL_NOT_READY')`,
-  }).from(deliveries).groupBy(deliveries.campaignId);
+  }).from(deliveries)
+    .where(inArray(deliveries.campaignId, camps.map((c) => c.id)))
+    .groupBy(deliveries.campaignId);
 
   const byId = new Map(rows.map((r) => [r.campaignId, r]));
 
