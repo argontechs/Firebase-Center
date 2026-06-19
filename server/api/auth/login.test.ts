@@ -67,4 +67,30 @@ describe('GET /api/auth/me', () => {
   it('401 without a session', async () => {
     await expect(meHandler(evt())).rejects.toMatchObject({ statusCode: 401 });
   });
+
+  it('returns user and re-emits Set-Cookie to slide the idle timeout', async () => {
+    await seedAdmin();
+    // First log in to get a real session cookie.
+    const loginEvt = evt({ body: { email: 'admin@bo.com', password: 'Str0ng-Passw0rd!' } });
+    const loginRes = await loginHandler(loginEvt);
+    expect(loginRes.user.email).toBe('admin@bo.com');
+
+    // Extract the session id from the Set-Cookie value written during login.
+    const setCookieAfterLogin: string = loginEvt._res['Set-Cookie'];
+    expect(setCookieAfterLogin).toContain('bo_session=');
+    const sessionId = setCookieAfterLogin.split(';')[0].split('=').slice(1).join('=');
+
+    // Call /me with the session cookie present.
+    const meEvt = evt({ cookies: { bo_session: sessionId } });
+    const meRes = await meHandler(meEvt);
+
+    // Should return the user.
+    expect(meRes.user.email).toBe('admin@bo.com');
+    expect(meRes.mustChangePassword).toBe(true);
+
+    // Must re-emit Set-Cookie so the browser slides its Max-Age.
+    const setCookieAfterMe: string = meEvt._res?.['Set-Cookie'] ?? '';
+    expect(setCookieAfterMe).toContain('bo_session=');
+    expect(setCookieAfterMe).toContain('Max-Age=1800'); // 30 * 60 seconds
+  });
 });
