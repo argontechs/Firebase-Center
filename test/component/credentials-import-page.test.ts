@@ -2,13 +2,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 
+const FAKE_CSRF_TOKEN = 'test-csrf-token-abc123';
+
 beforeEach(() => {
-  vi.stubGlobal('$fetch', vi.fn(async () => ({
-    created: 2,
-    updated: 1,
-    failed: 1,
-    errors: [{ rowNumber: 4, reason: 'SA_FILE_MISSING' }],
-  })));
+  vi.stubGlobal('$fetch', vi.fn(async (url: string, _opts?: RequestInit) => {
+    // Simulate CSRF endpoint returning a token.
+    if (url === '/api/auth/csrf') return { token: FAKE_CSRF_TOKEN };
+    return {
+      created: 2,
+      updated: 1,
+      failed: 1,
+      errors: [{ rowNumber: 4, reason: 'SA_FILE_MISSING' }],
+    };
+  }));
+
+  // Stub useCsrf as a global (auto-imported composable in Nuxt).
+  vi.stubGlobal('useCsrf', () => ({
+    token: { value: FAKE_CSRF_TOKEN },
+    fetchToken: vi.fn(async () => {}),
+    headers: vi.fn(() => ({ 'x-csrf-token': FAKE_CSRF_TOKEN })),
+  }));
 });
 
 // Import AFTER globals are stubbed.
@@ -41,7 +54,10 @@ describe('CredentialsImportPage', () => {
 
     expect(globalThis.$fetch).toHaveBeenCalledWith(
       '/api/imports/credentials',
-      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'x-csrf-token': FAKE_CSRF_TOKEN }),
+      }),
     );
 
     const summary = wrapper.get('[data-test="import-summary"]').text();
