@@ -42,6 +42,10 @@ export async function authedFetch(
     .send({ email: user.email, password: user.plaintextPassword })
     .set('Content-Type', 'application/json');
 
+  if (loginRes.status !== 200) {
+    throw new Error(`authedFetch: login failed with status ${loginRes.status} — check credentials or user status`);
+  }
+
   const sessionCookie = extractCookie(loginRes.headers['set-cookie'], 'bo_session');
 
   // 2. Fetch CSRF token

@@ -21,8 +21,8 @@ async function submitLogin() {
 
 async function submitChange() {
   error.value = '';
-  await csrf.fetchToken();
   try {
+    await csrf.fetchToken();
     await $fetch('/api/auth/change-password', {
       method: 'POST',
       headers: csrf.headers(),
