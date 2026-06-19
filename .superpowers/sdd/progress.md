@@ -36,3 +36,5 @@
 - TEST-HARDENING TODO (add): UI component tests assert old label "Companies"/"Company" — update to "Sites"/"Site" (display-text only; keep data-key refs). Plus M1.14, M2.6, M4.0 harness, M4.9, parallel-DB-contention.
 - M4 COMPLETE (M4.1–M4.8: devices, import, ingest keys, devices/ingest UI). Build gate PASS. Auto-fixed M4.8 CSRF fetchToken gaps. Count: 44/72. 5/8 milestones done.
 - M5 next: FCM + Huawei adapters (M5.1–M5.7). Apply Addendum D (Huawei click_action) in M5.5.
+- M5 COMPLETE (M5.1–M5.7: push types, token cache, resolve, FCM adapter, Huawei adapter + Addendum D click_action, registry, cross-adapter verify). Build gate PASS. Auto-fixed: M5.3 test-quality (pg-mem), M5.4 (4 FCM findings), M5.5 (2 Huawei findings), M5.7 (2 parity findings). Count: 51/72. 6/8 milestones.
+- M6 next: send pipeline (M6.1–M6.9) THEN author+build the send-API (per-site send keys, POST /api/v1/messages) — NOT in original plan, ~3 new tasks. Apply Addendum D click_action pre-flight in M6.1.
