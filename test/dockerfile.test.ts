@@ -19,8 +19,8 @@ describe('Dockerfile', () => {
   });
 
   it('installs from the lockfile and builds', () => {
-    expect(df).toMatch(/npm ci/);
-    expect(df).toMatch(/npm run build/);
+    expect(df).toMatch(/pnpm install --frozen-lockfile/);
+    expect(df).toMatch(/pnpm run build/);
   });
 
   it('uses the entrypoint script', () => {
