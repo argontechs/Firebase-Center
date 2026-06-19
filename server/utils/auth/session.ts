@@ -35,6 +35,18 @@ export async function destroyAllSessionsForUser(userId: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.userId, userId));
 }
 
+/**
+ * Serialize a session cookie header value with hardened flags.
+ *
+ * **Re-emission contract (sliding idle window):**
+ * The cookie's `Max-Age` is `maxAgeSec` seconds from the moment the `Set-Cookie`
+ * header is sent. To honour the sliding idle timeout, every authenticated response
+ * handler MUST call `serializeSessionCookie(sessionId, IDLE_TIMEOUT_MS / 1000)` and
+ * set the returned string as the `Set-Cookie` response header. Failing to do so means
+ * the browser evicts the cookie `IDLE_TIMEOUT_MS` after *login*, making any subsequent
+ * DB-side `lastSeenAt` update unreachable — the sliding window effectively becomes a
+ * fixed 30-minute session.
+ */
 export function serializeSessionCookie(sessionId: string, maxAgeSec: number): string {
   return `${SESSION_COOKIE_NAME}=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAgeSec}`;
 }

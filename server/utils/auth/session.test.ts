@@ -4,7 +4,7 @@ import { seedUser } from '~/server/test/auth';
 import {
   createSession, readSession, destroySession, destroyAllSessionsForUser,
   serializeSessionCookie, clearSessionCookie, SESSION_COOKIE_NAME,
-  IDLE_TIMEOUT_MS,
+  IDLE_TIMEOUT_MS, ABSOLUTE_TIMEOUT_MS,
 } from './session';
 
 beforeEach(async () => { await truncate('sessions', 'users'); });
@@ -47,6 +47,17 @@ describe('session', () => {
     vi.useRealTimers();
   });
 
+  it('expires after absolute timeout even with recent activity', async () => {
+    const { id: uid } = await seedUser();
+    const { sessionId } = await createSession(uid);
+    vi.useFakeTimers();
+    // Advance past the 12-hour hard cap; idle window (30 min) is still open relative
+    // to the faked "now", but absoluteExpiry has been exceeded.
+    vi.setSystemTime(Date.now() + ABSOLUTE_TIMEOUT_MS + 1000);
+    expect(await readSession(sessionId)).toBeNull();
+    vi.useRealTimers();
+  });
+
   it('serializes a hardened cookie and a clearing cookie', () => {
     const c = serializeSessionCookie('abc', 3600);
     expect(c).toContain(`${SESSION_COOKIE_NAME}=abc`);
@@ -55,5 +66,14 @@ describe('session', () => {
     expect(c).toContain('SameSite=Lax');
     expect(c).toContain('Path=/');
     expect(clearSessionCookie()).toContain('Max-Age=0');
+  });
+
+  it('createSession cookie uses IDLE_TIMEOUT_MS as Max-Age (callers must re-emit on each response to keep the sliding window alive)', async () => {
+    const { id: uid } = await seedUser();
+    const { cookie } = await createSession(uid);
+    // The Max-Age must equal the idle timeout in seconds so that if the caller
+    // re-emits serializeSessionCookie on every authenticated response the browser
+    // window stays in sync with the DB sliding window.
+    expect(cookie).toContain(`Max-Age=${Math.floor(IDLE_TIMEOUT_MS / 1000)}`);
   });
 });
