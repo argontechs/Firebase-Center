@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitest/config';
+import vue from '@vitejs/plugin-vue';
 export default defineConfig({
+  plugins: [vue()],
   test: { environment: 'node', include: ['test/**/*.test.ts', 'server/**/*.test.ts', 'app/**/*.test.ts'], globals: false, hookTimeout: 30000 },
   resolve: {
     alias: {
