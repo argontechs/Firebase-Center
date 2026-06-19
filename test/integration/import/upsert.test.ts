@@ -43,6 +43,20 @@ describe('upsertDevices', () => {
     expect(d.lastSeenAt).not.toBeNull();
   });
 
+  it('reactivates a device previously marked invalid', async () => {
+    // Simulate a device that was inserted then marked invalid by token-hygiene logic.
+    await upsertDevices(db, appId, [row({ token: 'tok-invalid' })]);
+    await db.update(devices).set({ status: 'invalid' }).where(eq(devices.token, 'tok-invalid'));
+    const [before] = await db.select().from(devices).where(eq(devices.token, 'tok-invalid'));
+    expect(before.status).toBe('invalid');
+
+    // Re-importing the same token must flip status back to 'active'.
+    const r = await upsertDevices(db, appId, [row({ token: 'tok-invalid' })]);
+    expect(r).toEqual({ inserted: 0, updated: 1 });
+    const [after] = await db.select().from(devices).where(eq(devices.token, 'tok-invalid'));
+    expect(after.status).toBe('active');
+  });
+
   it('mixes insert + update in one batch', async () => {
     await upsertDevices(db, appId, [row({ token: 'tok-a' })]);
     const r = await upsertDevices(db, appId, [row({ token: 'tok-a' }), row({ token: 'tok-c', rowNumber: 2 })]);

@@ -41,6 +41,7 @@ export async function upsertDevices(db: Db, appId: string, rows: ValidRow[]): Pr
           platform: r.platform,
           externalUserId: r.externalUserId,
           attributesJsonb: r.attributes,
+          status: 'active',
           lastSeenAt: new Date(),
         },
       })
