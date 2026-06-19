@@ -181,6 +181,12 @@ describe('rotateSendKey', () => {
     const unknownId = '99999999-0000-0000-0000-000000000001';
     await expect(rotateSendKey(db, COMPANY_ID, unknownId, USER_ID)).rejects.toMatchObject({ statusCode: 404 });
   });
+
+  it('throws 404 when rotating an already-revoked key', async () => {
+    const { id } = await issueSendKey(db, COMPANY_ID, USER_ID, 'revoked-key');
+    await revokeSendKey(db, COMPANY_ID, id);
+    await expect(rotateSendKey(db, COMPANY_ID, id, USER_ID)).rejects.toMatchObject({ statusCode: 404 });
+  });
 });
 
 // ---------------------------------------------------------------------------

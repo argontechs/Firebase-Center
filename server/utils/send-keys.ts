@@ -82,7 +82,7 @@ export async function rotateSendKey(
   const [old] = await db
     .select()
     .from(siteSendKeys)
-    .where(and(eq(siteSendKeys.id, keyId), eq(siteSendKeys.companyId, companyId)));
+    .where(and(eq(siteSendKeys.id, keyId), eq(siteSendKeys.companyId, companyId), isNull(siteSendKeys.revokedAt)));
   if (!old) throw createError({ statusCode: 404, statusMessage: 'send key not found' });
 
   // Revoke the old key
