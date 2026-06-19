@@ -84,6 +84,23 @@ describe('huaweiAdapter.mintToken', () => {
     expect(String(init.body)).toContain('client_id=900');     // secret.appId
     expect(String(init.body)).toContain('client_secret=SEC');  // secret.appSecret
   });
+
+  it('throws a readable error when the OAuth endpoint returns HTTP 401 (wrong credentials)', async () => {
+    fetchMock.mockReturnValueOnce(
+      jsonResponse({ error: 'invalid_client', error_description: 'Bad App ID or Secret' }, 401),
+    );
+    await expect(huaweiAdapter.mintToken(fcred())).rejects.toThrow(/Huawei OAuth token request failed.*HTTP 401.*invalid_client/i);
+  });
+
+  it('throws a readable error when the OAuth endpoint returns HTTP 400', async () => {
+    fetchMock.mockReturnValueOnce(jsonResponse({ error: 'invalid_request' }, 400));
+    await expect(huaweiAdapter.mintToken(fcred())).rejects.toThrow(/HTTP 400/);
+  });
+
+  it('throws when access_token is absent from a 200 response', async () => {
+    fetchMock.mockReturnValueOnce(jsonResponse({ token_type: 'Bearer', expires_in: 3600 }));
+    await expect(huaweiAdapter.mintToken(fcred())).rejects.toThrow(/missing access_token/i);
+  });
 });
 
 describe('huaweiAdapter.send', () => {
@@ -158,10 +175,17 @@ describe('huaweiAdapter.send', () => {
     expect(out.every((r) => r.disposition === 'RETRY_BACKOFF')).toBe(true);
   });
 
-  it('maps 80300008 (oversize) and 80100003 to FIX_REQUEST/failed', async () => {
+  it('maps 80300008 (oversize payload) to FIX_REQUEST/failed', async () => {
     fetchMock.mockReturnValueOnce(jsonResponse({ code: '80300008', msg: 'too large', requestId: 'r1' }));
     const out = await huaweiAdapter.send(fcred(), huaweiAdapter.render(msg()), recips);
     expect(out.every((r) => r.disposition === 'FIX_REQUEST')).toBe(true);
+  });
+
+  it('maps 80100003 (click_action.type:1 structure error) to FIX_REQUEST/failed', async () => {
+    // Re-stub mint for this test (beforeEach already consumed the first mock slot).
+    fetchMock.mockReturnValueOnce(jsonResponse({ code: '80100003', msg: 'invalid click_action', requestId: 'r2' }));
+    const out = await huaweiAdapter.send(fcred(), huaweiAdapter.render(msg()), recips);
+    expect(out.every((r) => r.status === 'failed' && r.disposition === 'FIX_REQUEST')).toBe(true);
   });
 
   it('maps 80300010 (token count > 1000) to FIX_REQUEST/failed, NOT RETRY_BACKOFF', async () => {

@@ -168,7 +168,23 @@ export const huaweiAdapter: PushProvider = {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,
     });
-    const json = (await resp.json()) as { access_token: string; expires_in: number };
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const errBody = (await resp.json()) as { error?: string; error_description?: string };
+        if (errBody.error) detail += ` ${errBody.error}`;
+        if (errBody.error_description) detail += `: ${errBody.error_description}`;
+      } catch {
+        // ignore parse failure; detail already contains the HTTP status
+      }
+      throw new Error(`Huawei OAuth token request failed (appId=${secret.appId}): ${detail}`);
+    }
+    const json = (await resp.json()) as { access_token?: string; expires_in: number };
+    if (!json.access_token) {
+      throw new Error(
+        `Huawei OAuth response missing access_token (appId=${secret.appId}): ${JSON.stringify(json)}`,
+      );
+    }
     return { token: json.access_token, expiresAt: Date.now() + json.expires_in * 1000 };
   },
 
