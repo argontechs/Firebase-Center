@@ -1,7 +1,9 @@
 import type { H3Event } from 'h3';
-import { Pool } from 'pg';
+import pg from 'pg';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
+
+const { Pool } = pg;
 
 const connectionString = process.env.NUXT_DATABASE_URL;
 if (!connectionString) {

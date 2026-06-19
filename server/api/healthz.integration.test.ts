@@ -1,6 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { Pool } from 'pg';
-import { checkHealth } from './healthz.get';
+import { describe, it, expect, beforeAll } from 'vitest';
+import pg from 'pg';
+
+const { Pool } = pg;
+
+// Set env before importing healthz.get so client.ts does not throw at load time.
+let checkHealth: (typeof import('./healthz.get'))['checkHealth'];
+beforeAll(async () => {
+  process.env.NUXT_DATABASE_URL ??=
+    'postgres://firebase_center:change_me_postgres@localhost:5432/firebase_center';
+  ({ checkHealth } = await import('./healthz.get'));
+});
 
 const url = process.env.NUXT_DATABASE_URL;
 const run = url ? describe : describe.skip;
