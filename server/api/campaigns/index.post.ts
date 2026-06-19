@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { defineEventHandler, readBody, createError } from 'h3';
 import { db } from '~~/server/db/client';
 import { campaigns } from '~~/server/db/schema';
@@ -7,6 +8,19 @@ import { validatePayloadSize, validateHuaweiClickAction, PayloadTooLargeError } 
 import { enqueueCampaign } from '~~/server/utils/queue/enqueue';
 import { audit } from '~~/server/utils/audit';
 import type { NeutralMessage, Provider } from '~~/server/utils/push/types';
+
+const Body = z.object({
+  appId: z.string().uuid(),
+  title: z.string().min(1),
+  body: z.string().min(1),
+  data: z.record(z.string()).optional().default({}),
+  mode: z.enum(['notification', 'data']).default('notification'),
+  priority: z.enum(['high', 'normal']).default('high'),
+  targetType: z.string(),
+  targetValue: z.object({ device_ids: z.array(z.string()).optional() }).default({}),
+  providerScope: z.enum(['fcm', 'huawei', 'both']).default('both'),
+  image: z.string().url().optional(),
+});
 
 /**
  * POST /api/campaigns
@@ -24,7 +38,9 @@ import type { NeutralMessage, Provider } from '~~/server/utils/push/types';
 export default defineEventHandler(async (event) => {
   const session = await requireSession(event);
 
-  const body = await readBody(event);
+  const parsed = Body.safeParse(await readBody(event));
+  if (!parsed.success) throw createError({ statusCode: 422, statusMessage: 'invalid body' });
+  const body = parsed.data;
 
   // Reserved enum values — rejected until built (design §6/§10).
   if (body.targetType === 'segment' || body.targetType === 'topic') {
@@ -38,11 +54,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const message: NeutralMessage = {
-    title: body.title ?? '',
-    body: body.body ?? '',
-    data: (body.data ?? {}) as Record<string, string>,
-    mode: body.mode ?? 'notification',
-    priority: body.priority ?? 'high',
+    title: body.title,
+    body: body.body,
+    data: body.data as Record<string, string>,
+    mode: body.mode,
+    priority: body.priority,
     ...(body.image ? { image: body.image } : {}),
   };
 
@@ -50,7 +66,7 @@ export default defineEventHandler(async (event) => {
   validateHuaweiClickAction(message);
 
   // Resolve the audience and validate payload size per distinct provider.
-  const groups = await previewAudience(body.appId, body.targetType, body.targetValue ?? {});
+  const groups = await previewAudience(body.appId, body.targetType, body.targetValue);
   const providers = [...new Set(groups.map((g) => g.provider))] as Provider[];
   const checkProviders = providers.length > 0 ? providers : (['fcm'] as Provider[]);
 
@@ -73,12 +89,12 @@ export default defineEventHandler(async (event) => {
     appId: body.appId,
     title: body.title,
     body: body.body,
-    dataJsonb: body.data ?? {},
-    mode: body.mode ?? 'notification',
-    priority: body.priority ?? 'high',
+    dataJsonb: body.data,
+    mode: body.mode,
+    priority: body.priority,
     targetType: body.targetType,
-    targetValueJsonb: body.targetValue ?? {},
-    providerScope: body.providerScope ?? 'both',
+    targetValueJsonb: body.targetValue,
+    providerScope: body.providerScope,
     status: 'queued',
     createdBy: session.userId,
   }).returning();

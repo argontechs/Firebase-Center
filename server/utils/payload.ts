@@ -26,7 +26,7 @@ export class PayloadTooLargeError extends Error {
  *
  * Throws PayloadTooLargeError if the rendered body exceeds MAX_PAYLOAD_BYTES.
  */
-function renderBodyForSizing(message: NeutralMessage, provider: Provider): unknown {
+export function renderBodyForSizing(message: NeutralMessage, provider: Provider): unknown {
   const notificationBlock =
     message.mode === 'notification'
       ? {

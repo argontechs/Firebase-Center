@@ -1,8 +1,22 @@
-import { defineEventHandler, readBody } from 'h3';
+import { z } from 'zod';
+import { defineEventHandler, readBody, createError } from 'h3';
 import { requireSession } from '~~/server/utils/auth/guard';
 import { previewAudience } from '~~/server/utils/campaigns/audience';
-import { validatePayloadSize, PayloadTooLargeError } from '~~/server/utils/payload';
+import { validatePayloadSize, renderBodyForSizing, PayloadTooLargeError } from '~~/server/utils/payload';
 import type { NeutralMessage, Provider } from '~~/server/utils/push/types';
+
+const Body = z.object({
+  appId: z.string().uuid(),
+  mode: z.enum(['notification', 'data']).default('notification'),
+  priority: z.enum(['high', 'normal']).default('high'),
+  targetType: z.enum(['all', 'tokens']),
+  targetValue: z.object({ device_ids: z.array(z.string()).optional() }).default({}),
+  providerScope: z.enum(['fcm', 'huawei', 'both']).default('both'),
+  title: z.string().min(1),
+  body: z.string().min(1),
+  data: z.record(z.string()).optional().default({}),
+  image: z.string().url().optional(),
+});
 
 /**
  * POST /api/campaigns/preview
@@ -16,14 +30,16 @@ import type { NeutralMessage, Provider } from '~~/server/utils/push/types';
 export default defineEventHandler(async (event) => {
   await requireSession(event);
 
-  const body = await readBody(event);
+  const parsed = Body.safeParse(await readBody(event));
+  if (!parsed.success) throw createError({ statusCode: 422, statusMessage: 'invalid body' });
+  const body = parsed.data;
 
   const message: NeutralMessage = {
-    title: body.title ?? '',
-    body: body.body ?? '',
-    data: (body.data ?? {}) as Record<string, string>,
-    mode: body.mode ?? 'notification',
-    priority: body.priority ?? 'high',
+    title: body.title,
+    body: body.body,
+    data: body.data as Record<string, string>,
+    mode: body.mode,
+    priority: body.priority,
     ...(body.image ? { image: body.image } : {}),
   };
 
@@ -40,12 +56,10 @@ export default defineEventHandler(async (event) => {
   for (const provider of checkProviders) {
     try {
       validatePayloadSize(message, provider);
-      // Measure rendered size using validatePayloadSize's internal logic mirror:
-      // We call it only to detect overflow; for the byte count we do a simple JSON size.
-      const sizeBytes = Buffer.byteLength(
-        JSON.stringify({ title: message.title, body: message.body, data: message.data }),
-        'utf8',
-      );
+      // Use the same renderBodyForSizing path that validatePayloadSize uses internally
+      // so the byte count reflects the true provider-envelope size (FCM +29 B overhead,
+      // Huawei +90 B overhead) rather than a raw title/body/data JSON slice.
+      const sizeBytes = Buffer.byteLength(JSON.stringify(renderBodyForSizing(message, provider)), 'utf8');
       totalBytes = Math.max(totalBytes, sizeBytes);
     } catch (e) {
       if (e instanceof PayloadTooLargeError) {
