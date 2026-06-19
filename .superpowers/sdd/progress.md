@@ -18,3 +18,8 @@
 - Build plan Task **M1.12** (create / disable / role-change `server/api/users/*` + admin UI) AND keep roles (admin/operator). Do this right after the running M1.1–M1.11 (login core) workflow completes.
 - M1.14 integration tests KEEP their user_create assertions (no longer cut).
 - Net: M1 = full plan (M1.1–M1.12, M1.14). Single-admin cut from earlier is VOID.
+
+## BUILD CONVENTION (learned from M1 build break)
+- Server-to-server imports MUST use `~~/server/...` (rootDir), NOT `~/server/...` (~ = app/ srcDir → breaks `nuxt build`). vitest.config aliases ~~/@@/@/~ all to root.
+- Run `pnpm run build` at the END of each milestone (the per-task vitest run does NOT catch Nitro build/resolution failures).
+- Known issue (defer to test-infra fix): full `pnpm test` has parallel DB contention (FK/deadlock) on shared test Postgres — run DB tests serially or isolate per-file.
