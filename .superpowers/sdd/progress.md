@@ -31,3 +31,6 @@
 - M2: COMPLETE (M2.1–M2.5 Sites & Apps CRUD + UI, build gate PASS). Label default set to Site/Sites.
 - M3: COMPLETE (M3.1–M3.9: AES-256-GCM vault, write-only creds, rotation, master-key rotation, credential CSV-manifest import). Build gate PASS. Fixes: fingerprint->HMAC, rotate 400-not-500, atomic company/app upsert + UNIQUE (migration 0002), CSRF in import composable, credentials.vue import path. Tightened workflow fix-loop now acts on any Important/Critical finding regardless of reviewer verdict.
 - Count: 36/72 tasks (M0 10, M1 12, M2 5, M3 9). Deferred to test-hardening: M1.14, M2.6, M4.0 harness, M4.9, parallel-DB-contention fix.
+- M4 core COMPLETE (M4.1–M4.6: device parse/validate/upsert, import route, ingest-keys, bearer-auth POST /api/apps/:id/devices). Build gate PASS. Auto-fixed: upsert status-reset, import route 400s (malformed mapping JSON, app existence), 2 ingest-endpoint security findings.
+- Count: 42/72. Building M4.7/M4.8 (devices UI) next, then M5 (FCM+Huawei adapters).
+- TEST-HARDENING TODO (add): UI component tests assert old label "Companies"/"Company" — update to "Sites"/"Site" (display-text only; keep data-key refs). Plus M1.14, M2.6, M4.0 harness, M4.9, parallel-DB-contention.
