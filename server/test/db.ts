@@ -54,6 +54,8 @@ export async function makeTestApp() {
     { default: ingestKeysGet },
     { default: ingestKeyRotatePost },
     { default: ingestKeyRevokePost },
+    // M4.6: device registration ingest
+    { default: devicesPost },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -82,6 +84,8 @@ export async function makeTestApp() {
     import('~~/server/api/apps/[id]/ingest-keys/index.get'),
     import('~~/server/api/apps/[id]/ingest-keys/[kid]/rotate.post'),
     import('~~/server/api/apps/[id]/ingest-keys/[kid]/revoke.post'),
+    // M4.6
+    import('~~/server/api/apps/[id]/devices.post'),
   ]);
 
   const app = createApp();
@@ -114,6 +118,8 @@ export async function makeTestApp() {
   router.get('/api/apps/:id/ingest-keys', eventHandler(ingestKeysGet));
   router.post('/api/apps/:id/ingest-keys/:kid/rotate', eventHandler(ingestKeyRotatePost));
   router.post('/api/apps/:id/ingest-keys/:kid/revoke', eventHandler(ingestKeyRevokePost));
+  // M4.6: device registration ingest
+  router.post('/api/apps/:id/devices', eventHandler(devicesPost));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
