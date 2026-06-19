@@ -5,19 +5,19 @@ import { db } from '~/server/db/client';
 import { users } from '~/server/db/schema';
 import { hashPassword, verifyPassword } from '~/server/utils/auth/password';
 import { validatePasswordStrength } from '~/server/db/seed';
-import { requireSession } from '~/server/utils/auth/guard';
+import { requireUser } from '~/server/utils/auth/guard';
 import { destroyAllSessionsForUser, createSession } from '~/server/utils/auth/session';
 import { audit } from '~/server/utils/audit';
 
 const Body = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(1) });
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireSession(event);   // throws 401 when no session
+  // requireUser enforces session validity AND user.status === 'active'; disabled operators cannot change their password.
+  const user = await requireUser(event);
   const parsed = Body.safeParse(await readBody(event));
   if (!parsed.success) throw createError({ statusCode: 400, statusMessage: 'invalid body' });
 
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  if (!user || !(await verifyPassword(user.passwordHash, parsed.data.currentPassword))) {
+  if (!(await verifyPassword(user.passwordHash, parsed.data.currentPassword))) {
     throw createError({ statusCode: 401, statusMessage: 'invalid current password' });
   }
   const strength = validatePasswordStrength(parsed.data.newPassword);

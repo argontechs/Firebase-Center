@@ -51,6 +51,13 @@ describe('change-password', () => {
     await expect(changePassword(e)).rejects.toMatchObject({ statusCode: 401 });
   });
 
+  it('rejects a disabled operator with 401 even with a valid session', async () => {
+    const [u] = await db.insert(users).values({ email: 'disabled@bo.com', passwordHash: await hashPassword('Old-Passw0rd!1'), status: 'disabled' }).returning();
+    const { sessionId } = await createSession(u.id);
+    const e: any = { _body: { currentPassword: 'Old-Passw0rd!1', newPassword: 'New-Str0ng!2x' }, _cookies: { bo_session: sessionId } };
+    await expect(changePassword(e)).rejects.toMatchObject({ statusCode: 401 });
+  });
+
   it('rejects a weak new password with 400', async () => {
     const { sessionId } = await seedUserWithSession();
     const e: any = { _body: { currentPassword: 'Old-Passw0rd!1', newPassword: 'weak' }, _cookies: { bo_session: sessionId } };
