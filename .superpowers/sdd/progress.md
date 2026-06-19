@@ -1,0 +1,11 @@
+# Firebase Center — build progress ledger
+
+## Scope (v1, LOCKED 2026-06-19)
+- Internal tool, single team (NOT external multi-tenant).
+- "Site" is the display label for the `companies` entity — rename-safe label constant, default "Site" (set in plan Task M2.1).
+- CUT: user roles + user management. Plan Task **M1.12 is SKIPPED**; auth is a single admin (seeded). M1.14 must NOT assert `user_create`; M7.3 audit-coverage drops the user_* actions.
+- ADD (at M6): programmatic **send API** `POST /api/v1/messages` authed by per-site **send API keys** (issued in UI, hashed, shown once, revocable, rate-limited, audited) — reuses the send pipeline. Author as new M6 tasks when M6 is reached.
+- KEEP: encrypted vault + master-key rotation, FCM + Huawei adapters, durable send pipeline (jobs/lease/retry), device CSV import + live app-ingest API, credential CSV-manifest import (M3.8/M3.9), scripted backup, Docker/cross-OS.
+
+## Tasks completed
+(none yet)
