@@ -20,7 +20,7 @@ It centralizes credential management, a stored audience of device tokens (import
 ### Goals
 - One BO to **manage push credentials for many apps** across FCM + Huawei.
 - **Create a profile per app**, fill in its credentials, and send through one interface — the BO runs each provider's OAuth flow under the hood.
-- **Store and manage device tokens** (managed audiences) per app, with **first-class bulk import**.
+- **Store and manage device tokens** (managed audiences) per app, with **first-class bulk import** — both **provider credentials** (CSV manifest + JSON files, to onboard many apps at once) and **device tokens**.
 - **Compose and send** to all devices or specific devices from the stored audience; see delivery results; auto-clean dead tokens. *(Attribute-based segments are a fast-follow — §15.)*
 - Run **everywhere via Docker** (Linux / Windows / macOS), copy to a live PC and `docker compose up`.
 - Be a **maintainable production system for ≥ 1 year**.
@@ -40,7 +40,7 @@ It centralizes credential management, a stored audience of device tokens (import
 | R3 | **Multi-tenant**: many companies → each many apps → each its own credentials + devices | user |
 | R4 | **Operator-only auth** — the owner's team operates it; no external company logins | user |
 | R5 | **Managed audiences** — system remembers all users' devices; send to stored audiences | user |
-| R6 | **Bulk data import** is first-class (existing tokens/users brought in) | user |
+| R6 | **Bulk import** is first-class — **provider credentials** (CSV manifest + JSON files) **and** device tokens | user |
 | R7 | Providers: **FCM + Huawei Push Kit**, each OAuth2 ("2 OAuth") | user |
 | R8 | Provider **secrets encrypted at rest**; never returned to client | best practice (ref §6) |
 | R9 | Start at **small scale** (≤ ~10k devices) but **no rewrite to scale up** | user + design |
@@ -96,7 +96,7 @@ Firebase Center (operated by the team)
 - **Provider adapter layer** — `PushProvider` interface with `FcmAdapter` + `HuaweiAdapter`; mints/caches tokens, renders the neutral message to each wire shape, sends, normalizes errors.
 - **Token cache** — in-memory access tokens keyed **per credential** (each FCM service account / Huawei app), proactive refresh (< 5 min before 1h expiry).
 - **Send pipeline** — campaign → `jobs` rows → worker → adapters → `deliveries` + token cleanup.
-- **Import pipeline** — CSV/JSON upload → validate → upsert devices by token.
+- **Import pipelines** — (A) credential import: CSV manifest + `.json` files → upsert company/app/credential (encrypted); (B) device import: CSV/JSON → validate → upsert devices by token.
 - **Auth** — team accounts (email + password, roles), session cookie.
 
 ## 6. Data Model (PostgreSQL via Drizzle)
@@ -171,15 +171,25 @@ interface PushProvider {
 - **Rotation:** `key_version` enables master-key rotation; provider-credential rotation is a UI re-upload / re-enter.
 - **Master-key durability (footgun):** `BO_MASTER_KEY` MUST be backed up out-of-band and stored **separately from the DB volume** — the volume holds only ciphertext, so a volume copy without the key is useless, and losing the key with no backup bricks every stored credential. **Recovery from key loss = re-enter all provider secrets** via the write-only UI (regenerate the FCM SA JSON in Firebase Console; Huawei App Secret in AGC). Two live `key_version`s during rotation aid recovery if a historical key survives. (See §12 backup/restore.)
 
-## 9. Import Pipeline (first-class)
+## 9. Import Pipelines (first-class)
 
+Two bulk imports: **(A) credential import** to onboard many apps' provider credentials at once, and **(B) device-token import** for a one-time/bulk migration of an existing audience. Device tokens *also* arrive continuously via the app-ingest API.
+
+### 9A. Credential import — CSV manifest + JSON files
+1. Upload a **CSV manifest** plus the FCM **service-account `.json` files** it references (a folder/zip). Each manifest row = one credential.
+2. **Manifest columns:** `company` (name), `app` (name), `provider` (`fcm|huawei`), `platform` (`ios|android|huawei|web|any`), `label`, and provider fields — **FCM:** `sa_json_file` (filename of an uploaded service-account JSON) + optional `project_id` (else read from the JSON); **Huawei:** `app_id`, `app_secret`, optional `huawei_project_id` (for the v2 endpoint).
+3. **Resolve hierarchy:** upsert **Company** by name, then **App** by `(company, name)` — so one manifest can onboard many companies/apps in a single pass.
+4. **Validate:** each referenced `sa_json_file` exists in the upload and parses (extract `project_id`/`client_email`); Huawei rows have `app_id`+`app_secret`; `(provider, platform)` is valid. Bad rows are rejected and reported (no partial-secret writes).
+5. **Encrypt & upsert** each credential into `app_credentials` via the vault (AES-256-GCM, §8), keyed by `(app_id, provider, platform)`; secrets become write-only thereafter. Every created/updated credential is audited; the raw `.json`/secret is never persisted unencrypted or logged.
+
+### 9B. Device-token import — CSV/JSON, per App
 1. Upload **CSV or JSON** for an App.
 2. **Map columns** → `token` (**required**), `provider` (**required**), `platform` (**required**), `external_user_id` (optional), plus any `attributes`. The mapper offers a per-import **default provider/platform** for when a column is absent.
 3. **Validate** — `token` present; `provider` recognized; `platform` present and **consistent with provider** (`huawei`⇒`huawei`; `fcm`⇒{`ios`,`android`,`web`}). Unroutable rows are **rejected into `imports.failed`** (never inserted as silently-undeliverable) and reported back.
 4. **Upsert by `(app_id, token)`** — no duplicates; existing rows updated.
 5. Record an `imports` row (counts, who, when).
 
-Apps may **also** register tokens going forward via the **app-ingest endpoint** `POST /api/apps/:id/devices`, authenticated by a **per-app ingest key** (not the operator session — see §11), bound to its App and whitelisted to set only `token`/`provider`/`platform`/`external_user_id`. Same validation + upsert path.
+Apps **also** register tokens continuously via the **app-ingest endpoint** `POST /api/apps/:id/devices`, authenticated by a **per-app ingest key** (not the operator session — see §11), bound to its App and whitelisted to set only `token`/`provider`/`platform`/`external_user_id`. Same validation + upsert path as 9B.
 
 ## 10. Send Pipeline
 
@@ -232,14 +242,14 @@ All operator routes require the session; sends, credential changes, and auth/adm
 
 ## 14. Scope — v1 vs Later
 
-**v1 (this build):** companies, apps, **per-platform** FCM + Huawei credentials (encrypted vault), CSV/JSON import with column-mapping + per-app-key app-ingest endpoint, compose + send (**all-devices** or **specific-devices**, notification/data mode, default-high priority, ≤4 KB payload validation), delivery results + event-driven invalid-token cleanup, retry-with-ceiling + dead-letter (`gave_up`), team auth (session hardening, CSRF, brute-force defense) + full audit log, DB-migrations-on-boot + backup/restore, Docker + cross-OS.
+**v1 (this build):** companies, apps, **per-platform** FCM + Huawei credentials (encrypted vault), **bulk credential import (CSV manifest + `.json` files, upserts company/app/credential)**, device-token import (CSV/JSON with column-mapping) + per-app-key app-ingest endpoint, compose + send (**all-devices** or **specific-devices**, notification/data mode, default-high priority, ≤4 KB payload validation), delivery results + event-driven invalid-token cleanup, retry-with-ceiling + dead-letter (`gave_up`), team auth (session hardening, CSRF, brute-force defense) + full audit log, DB-migrations-on-boot + backup/restore, Docker + cross-OS.
 
 **Later (not now):** **attribute-based audience segments**, per-company self-service logins (SaaS), scheduled/recurring sends, A/B testing, analytics dashboards, Redis/queue at high scale, topic-management UI, templates, APNs-direct / web-push-direct / extra channels, KMS-backed envelope encryption.
 
 ## 15. Resolved Decisions (review, 2026-06-19)
 
 1. **Separate iOS/Android Firebase projects.** The owner keeps **two Firebase projects** — one iOS, one Android — so each App holds **multiple FCM service-account credentials** (plus optional Huawei), modeled as `app_credentials` rows keyed by `(provider, platform)`. A device's `(provider, platform)` routes it to the correct credential.
-2. **Import format — flexible.** Exact source format is not yet fixed, so the importer supports **both CSV and JSON** with an explicit **column-mapping** step; defaults finalized once a real export sample is available.
+2. **Bulk import covers two things (decided 2026-06-19).** (a) **Credential import** — a **CSV manifest + the referenced FCM `.json` files**; it upserts Company→App→credential so many apps onboard in one pass (the chunky FCM service-account JSON stays in real files, not CSV cells). (b) **Device-token import** — CSV/JSON per App with a column-mapping step. Device tokens also arrive continuously via the app-ingest API. (See §9A/§9B.)
 3. **v1 targeting — all-devices + specific-devices only.** "Specific devices" = a selection of stored `devices` (each carries its `(provider, platform)` for routing), **not** raw pasted tokens. **Attribute-based segments and topic sends are out of v1 scope** — `segment`/`topic` remain reserved enum values rejected at the API until built (segment = fast-follow §15; topic = Later §14). `attributes_jsonb` is still stored now so segments can be added later with no migration.
 
 ## 16. References

@@ -489,19 +489,6 @@ GET  /api/campaigns/:id                    -> { campaign, deliveries }
 
 ---
 
-I'll apply the three review fixes plus the relevant coverage-gap tasks to the M0 milestone. Let me work through each fix carefully against the shared contracts.
-
-The fixes require:
-1. **DB client path**: Make `server/db/client.ts` canonical, export `db`/`pool`/`schema`/`client`, and add a `useDb(event)` shim so M4 can import it.
-2. **Seed forward-compatibility**: Make M0.8's `seedFirstAdmin` a forward-compatible stub that M1.6 extends — export `SeedError`, throw `SeedError` (not plain `Error`), keep the `/BO_ADMIN/` message and `_countUsers` hook so M1.11's integration test (`rejects.toBeInstanceOf(SeedError)`) stays consistent.
-3. **Align error type** across seed/entrypoint.
-
-Plus coverage-gap tasks that belong to M0 foundation: master-key rotation logic, user-management routes, and the structural error-handling wiring belong to later milestones — but the two that are foundational scaffolding (master-key rotation re-encryption helper + user-management route skeletons referenced by M7.3) need a home. Per the instruction "add tasks/steps here if they belong to this milestone M0," I'll add the foundational ones that are genuinely M0-scoped: the `client`/`useDb` plumbing and `SeedError`. The push-adapter and Huawei gaps belong to M5/M6, not M0, so I won't fabricate them here.
-
-Here is the corrected milestone markdown.
-
-The repo has only `docs/` and a git repo. Now I'll write the complete M0 milestone tasks.
-
 ## M0 — Foundation: scaffold, Docker, Drizzle, boot sequence
 
 **Goal:** Stand up a Nuxt 4 + Nitro app and a Postgres DB under docker-compose with a deterministic boot sequence (wait-for-db → migrate → seed-if-empty → serve) and a `/healthz` endpoint, so a fresh named volume self-initializes before serving traffic.
@@ -1729,11 +1716,6 @@ cd /Users/brendxn___/Desktop/Firebase-Center && git add -A && git commit -m "M0.
 
 ---
 
-I'll apply the review fixes. Let me work through them systematically. The key changes are: M1 must assume M0's schema/migration/config exist (not recreate them), add canonical auth guard helpers (`requireSession`/`requireUser`/`assertCsrf`), add shared test harness (`server/test/db.ts` with `resetDb`/`makeTestApp`, `server/test/auth.ts` with `seedUser`/`authedFetch`), document `sessions` as an M1-only schema extension, pin the test-DB convention to M0's, merge into the existing `nuxt.config.ts`, and add the missing coverage tasks (master-key rotation, user management) that belong to M1.
-
-Here is the corrected milestone markdown.
-
-```markdown
 ## M1 — Operator auth: argon2id, hardened sessions, CSRF, brute-force defense, first-admin seed, user management
 
 **Goal:** Provide secure operator-only authentication — argon2id hashing, hardened cookie sessions, CSRF protection, per-account+per-IP rate-limiting with lockout, a fail-loud idempotent first-admin seed, forced first-login password change, the canonical route-guard helpers every later milestone consumes, admin user-management (create/disable/role-change), audit logging, and route-guard middleware.
@@ -3634,23 +3616,8 @@ Here is the corrected milestone markdown.
 - [ ] **Step 5: Run the full suite + full audit assertion.** Run `npm test`. Expect every M1 test file green (password, audit, session, csrf, rate-limit, seed, guard, login, change-password, middleware/auth, useCsrf, users, integration). Confirm the integration run leaves `login_success`, `login_failure`, `password_change`, and `user_create` rows in `audit_log` as asserted.
 
 - [ ] **Step 6: Commit.** `git add -A && git commit -m "M1.14: healthz route + auth/admin integration tests (login/lockout/CSRF/forced-change/fail-loud seed/user-create/audit)"`
-```
 
 ---
-
-I'll apply the three review fixes plus the relevant coverage gaps. Let me work through them systematically.
-
-The key changes:
-1. **Prerequisite/helper reconciliation**: M1 actually delivers `readSession` (async) at `server/utils/auth/session.ts` and `verifyDoubleSubmit`/`verifyOrigin` at `server/utils/auth/csrf.ts`, plus test helpers. Update prerequisites and every route import.
-2. **DB import path**: align to canonical `server/db/client.ts` exporting `db`, `pool`.
-3. **Test helpers**: reconcile to what M1 actually delivers.
-4. **Coverage gaps**: Only one of the listed gaps belongs to M2 — none of master-key rotation, user management, FCM Retry-After, Huawei click_action, or Huawei 80300010 belong to M2 (Companies & Apps). Those are M3/M5/M6/M7 concerns. I will not invent M2 tasks for them.
-
-Here is the corrected milestone markdown.
-
----
-
-Only the two specs exist. I have everything I need. M2 builds on M0 (scaffolding: Nuxt 4, Drizzle, test Postgres) and M1 (session auth middleware + CSRF). I'll reference those as established prerequisites and write the M2 tasks against the shared contracts. Here is the milestone.
 
 ## M2 — Companies & Apps: CRUD API + minimal UI with rename-safe label constant
 
@@ -4827,12 +4794,6 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"`
   Command: `git add server/api/__tests__/company-app-lifecycle.test.ts server/utils/label-single-source.test.ts && git commit -m "M2.6: integration tests for company/app lifecycle + rename-safe label guard
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"`
-
----
-
-I'll apply the review fixes. Let me work through each one carefully, reconciling the naming and contracts across the milestone.
-
-Here is the corrected milestone markdown:
 
 ---
 
@@ -6042,11 +6003,580 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-I'll apply the review fixes to the M4 milestone markdown. Let me work through each fix systematically, reconciling the names/paths with the canonical M1 helpers and shared contracts, removing placeholders, and adding the missing coverage tasks that belong to M4.
+### Task M3.8: Implement credential-import core — `server/utils/import/credentials.ts` (manifest parse + validate + company/app upsert + encrypted `app_credentials` upsert + audit)
 
-Here is the corrected milestone markdown:
+> **Distinct from the M4 device import:** the CREDENTIAL manifest has DIFFERENT columns than the device import (M4.1's `token`/`provider`/`platform`/`externalUserId`). This task mirrors M4.1's `csv-parse/sync` style and M2's upsert-by-name hierarchy, but writes encrypted `app_credentials` rows via M3.1's `encryptSecret`/`fingerprint` (the whole FCM `.json` text or the Huawei App Secret is the secret) and audits each one with `credential_save` (the same `AuditAction` M3.3 uses). It reuses `companies`/`apps`/`appCredentials` columns and `saveCredential`'s encrypt-then-upsert shape verbatim — never persisting or logging the raw secret.
 
-```markdown
+**Files:**
+- Create: `server/utils/import/credentials.ts`
+- Test: `test/integration/import/credentials-import.test.ts`
+
+**Interfaces:**
+- Consumes: `parse as parseCsvSync` from `csv-parse/sync` (the `csv-parse@5` dep M4.1 adds); `db` (`~/server/db/client`); `companies`, `apps`, `appCredentials` (`~/server/db/schema`); `encryptSecret`, `fingerprint`, `decryptSecret` (`~/server/utils/crypto`, M3.1); `audit` with `AuditAction 'credential_save'` (`~/server/utils/audit`).
+- Produces:
+  ```ts
+  // server/utils/import/credentials.ts
+  export interface CredentialManifestRow {
+    rowNumber: number;              // 1-based source row (header = row 0)
+    company: string | null;
+    app: string | null;
+    provider: string | null;       // 'fcm' | 'huawei'
+    platform: string | null;       // 'ios' | 'android' | 'huawei' | 'web' | 'any'
+    label: string | null;
+    saJsonFile: string | null;     // FCM: filename of an uploaded .json
+    projectId: string | null;      // FCM optional override
+    appId: string | null;          // Huawei app_id
+    appSecret: string | null;      // Huawei app_secret
+    huaweiProjectId: string | null;// Huawei optional v2 project id
+  }
+  export function parseCredentialManifest(csv: string): CredentialManifestRow[];
+
+  export type CredImportReason =
+    | 'COMPANY_MISSING' | 'APP_MISSING' | 'PROVIDER_UNRECOGNIZED' | 'PLATFORM_INCONSISTENT'
+    | 'SA_FILE_MISSING' | 'SA_JSON_INVALID' | 'HUAWEI_FIELDS_MISSING';
+  export interface CredImportError { rowNumber: number; reason: CredImportReason; }
+  export interface CredImportResult { created: number; updated: number; failed: number; errors: CredImportError[]; }
+
+  // Validates + upserts company→app→app_credentials for every manifest row. `files` maps an uploaded
+  // .json filename → its raw text. Bad rows are collected in `errors` and never written (no partial secrets).
+  export function importCredentials(input: {
+    userId: string | null;
+    manifestCsv: string;
+    files: Record<string, string>;
+  }): Promise<CredImportResult>;
+  ```
+
+Steps:
+
+- [ ] **Step 1: Write the failing integration test.**
+  Create `test/integration/import/credentials-import.test.ts`:
+  ```ts
+  import { describe, it, expect, beforeEach } from 'vitest';
+  import { db } from '~/server/db/client';
+  import { appCredentials, apps, companies, users, auditLog } from '~/server/db/schema';
+  import { decryptSecret } from '~/server/utils/crypto';
+  import { parseCredentialManifest, importCredentials } from '~/server/utils/import/credentials';
+  import { and, eq } from 'drizzle-orm';
+
+  let userId = '';
+  const SA = JSON.stringify({ project_id: 'proj-1', client_email: 'x@y.iam', private_key: '-----BEGIN-----SA_SENTINEL-----END-----' });
+
+  beforeEach(async () => {
+    await db.delete(auditLog); await db.delete(appCredentials);
+    await db.delete(apps); await db.delete(companies); await db.delete(users);
+    const [u] = await db.insert(users).values({ email: 'op@x.io', passwordHash: 'h' }).returning();
+    userId = u.id;
+  });
+
+  describe('parseCredentialManifest', () => {
+    it('maps credential columns to 1-based rows (distinct from device-import columns)', () => {
+      const csv = 'company,app,provider,platform,label,sa_json_file,project_id,app_id,app_secret,huawei_project_id\n'
+        + 'Acme,Shopper,fcm,android,Android prod,acme.json,proj-1,,,\n'
+        + 'Acme,Shopper,huawei,huawei,HW,,,10086,sek,hw-proj\n';
+      const rows = parseCredentialManifest(csv);
+      expect(rows).toEqual([
+        { rowNumber: 1, company: 'Acme', app: 'Shopper', provider: 'fcm', platform: 'android', label: 'Android prod',
+          saJsonFile: 'acme.json', projectId: 'proj-1', appId: null, appSecret: null, huaweiProjectId: null },
+        { rowNumber: 2, company: 'Acme', app: 'Shopper', provider: 'huawei', platform: 'huawei', label: 'HW',
+          saJsonFile: null, projectId: null, appId: '10086', appSecret: 'sek', huaweiProjectId: 'hw-proj' },
+      ]);
+    });
+  });
+
+  describe('importCredentials', () => {
+    it('upserts Company by name, App by (company,name), and encrypts the FCM .json as the secret', async () => {
+      const csv = 'company,app,provider,platform,label,sa_json_file,project_id\nAcme,Shopper,fcm,android,prod,acme.json,\n';
+      const res = await importCredentials({ userId, manifestCsv: csv, files: { 'acme.json': SA } });
+      expect(res).toMatchObject({ created: 1, updated: 0, failed: 0, errors: [] });
+
+      const [company] = await db.select().from(companies).where(eq(companies.name, 'Acme'));
+      const [app] = await db.select().from(apps).where(and(eq(apps.companyId, company.id), eq(apps.name, 'Shopper')));
+      const [cred] = await db.select().from(appCredentials).where(eq(appCredentials.appId, app.id));
+      expect(cred.provider).toBe('fcm');
+      expect(cred.platform).toBe('android');
+      expect((cred.metaJsonb as any).project_id).toBe('proj-1');   // read from the .json when manifest omits it
+      expect(cred.secretCiphertext).not.toContain('SA_SENTINEL');
+      expect(decryptSecret({ ciphertext: cred.secretCiphertext, nonce: cred.secretNonce, tag: cred.secretTag, keyVersion: cred.keyVersion })).toBe(SA);
+    });
+
+    it('encrypts the Huawei app_secret and stores app_id/huawei_project_id in meta', async () => {
+      const csv = 'company,app,provider,platform,label,app_id,app_secret,huawei_project_id\nGlobex,Main,huawei,huawei,HW,10086,sek-xyz,hw-proj\n';
+      const res = await importCredentials({ userId, manifestCsv: csv, files: {} });
+      expect(res).toMatchObject({ created: 1, failed: 0 });
+      const [cred] = await db.select().from(appCredentials);
+      expect((cred.metaJsonb as any).app_id).toBe('10086');
+      expect((cred.metaJsonb as any).huawei_project_id).toBe('hw-proj');
+      expect(cred.secretCiphertext).not.toContain('sek-xyz');
+      expect(decryptSecret({ ciphertext: cred.secretCiphertext, nonce: cred.secretNonce, tag: cred.secretTag, keyVersion: cred.keyVersion })).toBe('sek-xyz');
+    });
+
+    it('re-running the same manifest UPDATES the credential keyed by (app_id, provider, platform)', async () => {
+      const csv = 'company,app,provider,platform,sa_json_file\nAcme,Shopper,fcm,android,acme.json\n';
+      await importCredentials({ userId, manifestCsv: csv, files: { 'acme.json': SA } });
+      const SA2 = JSON.stringify({ project_id: 'proj-1', client_email: 'x@y.iam', private_key: '-----BEGIN-----SA_ROTATED-----END-----' });
+      const res = await importCredentials({ userId, manifestCsv: csv, files: { 'acme.json': SA2 } });
+      expect(res).toMatchObject({ created: 0, updated: 1, failed: 0 });
+      const rows = await db.select().from(appCredentials);
+      expect(rows).toHaveLength(1);
+      expect(decryptSecret({ ciphertext: rows[0].secretCiphertext, nonce: rows[0].secretNonce, tag: rows[0].secretTag, keyVersion: rows[0].keyVersion })).toBe(SA2);
+    });
+
+    it('rejects bad rows (missing .json, invalid JSON, huawei fields missing, inconsistent platform) with NO partial writes', async () => {
+      const csv = 'company,app,provider,platform,sa_json_file,app_id,app_secret\n'
+        + 'Acme,Shopper,fcm,android,absent.json,,\n'        // SA_FILE_MISSING
+        + 'Acme,Shopper,fcm,ios,bad.json,,\n'               // SA_JSON_INVALID (parses but no project_id/client_email/private_key)
+        + 'Acme,Shopper,huawei,huawei,,,\n'                 // HUAWEI_FIELDS_MISSING
+        + 'Acme,Shopper,huawei,android,,10086,sek\n';      // PLATFORM_INCONSISTENT
+      const res = await importCredentials({ userId, manifestCsv: csv, files: { 'bad.json': '{"foo":"bar"}' } });
+      expect(res.created).toBe(0);
+      expect(res.failed).toBe(4);
+      expect(res.errors).toEqual([
+        { rowNumber: 1, reason: 'SA_FILE_MISSING' },
+        { rowNumber: 2, reason: 'SA_JSON_INVALID' },
+        { rowNumber: 3, reason: 'HUAWEI_FIELDS_MISSING' },
+        { rowNumber: 4, reason: 'PLATFORM_INCONSISTENT' },
+      ]);
+      expect(await db.select().from(appCredentials)).toHaveLength(0);   // never write a partial secret
+    });
+
+    it('audits each created/updated credential with credential_save and never logs the secret', async () => {
+      const csv = 'company,app,provider,platform,sa_json_file\nAcme,Shopper,fcm,android,acme.json\n';
+      const res = await importCredentials({ userId, manifestCsv: csv, files: { 'acme.json': SA } });
+      const [cred] = await db.select().from(appCredentials);
+      const audits = await db.select().from(auditLog).where(eq(auditLog.action, 'credential_save'));
+      expect(audits).toHaveLength(1);
+      expect(audits[0].targetId).toBe(cred.id);
+      expect(JSON.stringify(audits)).not.toContain('SA_SENTINEL');
+      expect(res.created).toBe(1);
+    });
+  });
+  ```
+
+- [ ] **Step 2: Run it — expect failure (module missing).**
+  Command: `npx vitest run test/integration/import/credentials-import.test.ts`
+  Expected: fails to resolve `~/server/utils/import/credentials`.
+
+- [ ] **Step 3: Implement `server/utils/import/credentials.ts`.**
+  ```ts
+  import { parse as parseCsvSync } from 'csv-parse/sync';
+  import { and, eq } from 'drizzle-orm';
+  import { db } from '~/server/db/client';
+  import { companies, apps, appCredentials } from '~/server/db/schema';
+  import { encryptSecret } from '~/server/utils/crypto';
+  import { audit } from '~/server/utils/audit';
+
+  export interface CredentialManifestRow {
+    rowNumber: number;
+    company: string | null;
+    app: string | null;
+    provider: string | null;
+    platform: string | null;
+    label: string | null;
+    saJsonFile: string | null;
+    projectId: string | null;
+    appId: string | null;
+    appSecret: string | null;
+    huaweiProjectId: string | null;
+  }
+
+  export type CredImportReason =
+    | 'COMPANY_MISSING' | 'APP_MISSING' | 'PROVIDER_UNRECOGNIZED' | 'PLATFORM_INCONSISTENT'
+    | 'SA_FILE_MISSING' | 'SA_JSON_INVALID' | 'HUAWEI_FIELDS_MISSING';
+  export interface CredImportError { rowNumber: number; reason: CredImportReason; }
+  export interface CredImportResult { created: number; updated: number; failed: number; errors: CredImportError[]; }
+
+  type Provider = 'fcm' | 'huawei';
+  type CredPlatform = 'ios' | 'android' | 'huawei' | 'web' | 'any';
+  const PROVIDERS = new Set<Provider>(['fcm', 'huawei']);
+  const FCM_PLATFORMS = new Set<CredPlatform>(['ios', 'android', 'web']);
+
+  function cell(record: Record<string, unknown>, col: string): string | null {
+    const v = record[col];
+    if (v === undefined || v === null) return null;
+    const s = String(v).trim();
+    return s === '' ? null : s;
+  }
+
+  export function parseCredentialManifest(csv: string): CredentialManifestRow[] {
+    const records: Record<string, unknown>[] = parseCsvSync(csv, { columns: true, skip_empty_lines: true, trim: true });
+    return records.map((r, i) => ({
+      rowNumber: i + 1,
+      company: cell(r, 'company'),
+      app: cell(r, 'app'),
+      provider: cell(r, 'provider'),
+      platform: cell(r, 'platform'),
+      label: cell(r, 'label'),
+      saJsonFile: cell(r, 'sa_json_file'),
+      projectId: cell(r, 'project_id'),
+      appId: cell(r, 'app_id'),
+      appSecret: cell(r, 'app_secret'),
+      huaweiProjectId: cell(r, 'huawei_project_id'),
+    }));
+  }
+
+  // Returns a per-row plan or an error reason. `secret` is the plaintext encrypted by encryptSecret;
+  // `meta` holds only non-secret display/readiness fields. `(provider,platform)`: huawei => huawei;
+  // fcm => {ios,android,web}; 'any' allowed only as a Huawei catch-all.
+  function planRow(
+    row: CredentialManifestRow,
+    files: Record<string, string>,
+  ): { secret: string; provider: Provider; platform: CredPlatform; meta: Record<string, unknown> } | { error: CredImportReason } {
+    if (!row.company) return { error: 'COMPANY_MISSING' };
+    if (!row.app) return { error: 'APP_MISSING' };
+    if (!row.provider || !PROVIDERS.has(row.provider as Provider)) return { error: 'PROVIDER_UNRECOGNIZED' };
+    const provider = row.provider as Provider;
+    const platform = (row.platform ?? '') as CredPlatform;
+    const consistent = provider === 'huawei'
+      ? (platform === 'huawei' || platform === 'any')
+      : FCM_PLATFORMS.has(platform);
+    if (!consistent) return { error: 'PLATFORM_INCONSISTENT' };
+
+    if (provider === 'fcm') {
+      if (!row.saJsonFile || !(row.saJsonFile in files)) return { error: 'SA_FILE_MISSING' };
+      const text = files[row.saJsonFile];
+      let parsed: Record<string, unknown>;
+      try { parsed = JSON.parse(text) as Record<string, unknown>; } catch { return { error: 'SA_JSON_INVALID' }; }
+      if (!parsed.project_id || !parsed.client_email || !parsed.private_key) return { error: 'SA_JSON_INVALID' };
+      return {
+        secret: text,
+        provider,
+        platform,
+        meta: { project_id: row.projectId ?? (parsed.project_id as string) },
+      };
+    }
+    // provider === 'huawei'
+    if (!row.appId || !row.appSecret) return { error: 'HUAWEI_FIELDS_MISSING' };
+    const meta: Record<string, unknown> = { app_id: row.appId };
+    if (row.huaweiProjectId) meta.huawei_project_id = row.huaweiProjectId;
+    return { secret: row.appSecret, provider, platform, meta };
+  }
+
+  async function upsertCompanyByName(name: string): Promise<string> {
+    const [existing] = await db.select({ id: companies.id }).from(companies).where(eq(companies.name, name));
+    if (existing) return existing.id;
+    const [row] = await db.insert(companies).values({ name }).returning({ id: companies.id });
+    return row.id;
+  }
+
+  async function upsertAppByName(companyId: string, name: string): Promise<string> {
+    const [existing] = await db.select({ id: apps.id }).from(apps).where(and(eq(apps.companyId, companyId), eq(apps.name, name)));
+    if (existing) return existing.id;
+    const [row] = await db.insert(apps).values({ companyId, name }).returning({ id: apps.id });
+    return row.id;
+  }
+
+  export async function importCredentials(input: {
+    userId: string | null;
+    manifestCsv: string;
+    files: Record<string, string>;
+  }): Promise<CredImportResult> {
+    const rows = parseCredentialManifest(input.manifestCsv);
+    const result: CredImportResult = { created: 0, updated: 0, failed: 0, errors: [] };
+
+    for (const row of rows) {
+      const plan = planRow(row, input.files);
+      if ('error' in plan) {
+        result.failed += 1;
+        result.errors.push({ rowNumber: row.rowNumber, reason: plan.error });
+        continue;
+      }
+
+      const companyId = await upsertCompanyByName(row.company!);
+      const appId = await upsertAppByName(companyId, row.app!);
+      const enc = encryptSecret(plan.secret);
+
+      // Upsert keyed by (app_id, provider, platform); existing row re-encrypted with a fresh nonce.
+      const inserted = await db.insert(appCredentials).values({
+        appId,
+        provider: plan.provider,
+        platform: plan.platform,
+        label: row.label,
+        secretCiphertext: enc.ciphertext,
+        secretNonce: enc.nonce,
+        secretTag: enc.tag,
+        keyVersion: enc.keyVersion,
+        metaJsonb: plan.meta,
+      }).onConflictDoUpdate({
+        target: [appCredentials.appId, appCredentials.provider, appCredentials.platform],
+        set: {
+          label: row.label,
+          secretCiphertext: enc.ciphertext,
+          secretNonce: enc.nonce,
+          secretTag: enc.tag,
+          keyVersion: enc.keyVersion,
+          metaJsonb: plan.meta,
+          rotatedAt: new Date(),
+        },
+      }).returning({ id: appCredentials.id, inserted: sql<boolean>`(xmax = 0)` });
+
+      const credId = inserted[0].id;
+      if (inserted[0].inserted) result.created += 1; else result.updated += 1;
+
+      await audit({
+        userId: input.userId,
+        action: 'credential_save',
+        targetType: 'app_credential',
+        targetId: credId,
+        meta: { appId, provider: plan.provider, platform: plan.platform, source: 'import' },
+      });
+    }
+    return result;
+  }
+  ```
+  Add the `sql` import at the top of the file alongside the existing drizzle import: `import { and, eq, sql } from 'drizzle-orm';` (real Postgres only: `xmax = 0` is true on a fresh insert, non-zero on an ON CONFLICT update — same accounting M4.2's `upsertDevices` uses).
+
+- [ ] **Step 4: Run it — expect pass.**
+  Command: `npx vitest run test/integration/import/credentials-import.test.ts`
+  Expected: all 6 tests pass (manifest parse, FCM encrypt + meta from .json, Huawei encrypt + meta, re-run updates by `(app_id,provider,platform)`, bad rows rejected with no writes, `credential_save` audit without leaking the secret).
+
+- [ ] **Step 5: Commit.**
+  ```bash
+  git add server/utils/import/credentials.ts test/integration/import/credentials-import.test.ts
+  git commit -m "M3.8: credential-import core — manifest parse, company/app upsert, encrypted app_credentials upsert, audit
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+  ```
+
+---
+
+### Task M3.9: Implement `POST /api/imports/credentials` (multipart manifest + .json files) and the "Import credentials" UI panel
+
+> **Mirrors M4.3's multipart route** (`readMultipartFormData`, one `file`/`format`/`mapping` part) but uploads ONE `manifest` CSV part plus N `.json` file parts, and is session + CSRF guarded with the SAME helpers M3.3 uses — `requireUser` (`~/server/utils/session`) and `assertCsrf` (`~/server/utils/csrf`). It delegates to `importCredentials` (M3.8) and returns `{ created, updated, failed, errors[] }`.
+
+**Files:**
+- Create: `server/api/imports/credentials.post.ts`
+- Create: `app/pages/imports/credentials.vue`
+- Create: `app/composables/useCredentialImport.ts`
+- Test: `test/integration/api/credentials-import.post.test.ts`
+- Test: `test/component/credentials-import-page.test.ts`
+
+**Interfaces:**
+- Consumes: `importCredentials` + `CredImportResult` (M3.8); `requireUser` (`~/server/utils/session`); `assertCsrf` (`~/server/utils/csrf`); `readMultipartFormData` (`h3`).
+- Produces:
+  - Route: `POST /api/imports/credentials` multipart `{ manifest: CSV, <name>.json: file × N }` → `CredImportResult` `{ created, updated, failed, errors[] }` (operator session + CSRF; admin or operator).
+  - `useCredentialImport()` composable: `submit(manifest: File, jsonFiles: File[]) => Promise<CredImportResult>`.
+  - `app/pages/imports/credentials.vue`: upload the manifest + the `.json` files, POST, render the result summary.
+
+Steps:
+
+- [ ] **Step 1: Write the failing integration test for the route.**
+  Create `test/integration/api/credentials-import.post.test.ts`:
+  ```ts
+  import { describe, it, expect, beforeEach } from 'vitest';
+  import { setupApiTest } from '../../helpers/api';   // M4.0 harness: $fetch + seeded session/CSRF + test DB
+  import { appCredentials, companies, apps, auditLog } from '../../../server/db/schema';
+  import { eq } from 'drizzle-orm';
+
+  let ctx: Awaited<ReturnType<typeof setupApiTest>>;
+  const SA = JSON.stringify({ project_id: 'proj-1', client_email: 'x@y.iam', private_key: '-----BEGIN-----SA_SENTINEL-----END-----' });
+
+  beforeEach(async () => { ctx = await setupApiTest(); });
+
+  function form(csv: string, files: Record<string, string>) {
+    const fd = new FormData();
+    fd.set('manifest', new Blob([csv], { type: 'text/csv' }), 'manifest.csv');
+    for (const [name, text] of Object.entries(files)) {
+      fd.append(name, new Blob([text], { type: 'application/json' }), name);
+    }
+    return fd;
+  }
+
+  it('imports a manifest + .json file, upserts company/app/credential, returns counts, audits credential_save', async () => {
+    const csv = 'company,app,provider,platform,sa_json_file\nAcme,Shopper,fcm,android,acme.json\n';
+    const res = await ctx.$fetch('/api/imports/credentials', {
+      method: 'POST', body: form(csv, { 'acme.json': SA }), headers: { 'x-csrf-token': ctx.csrf },
+    });
+    expect(res).toMatchObject({ created: 1, updated: 0, failed: 0, errors: [] });
+
+    const [company] = await ctx.db.select().from(companies).where(eq(companies.name, 'Acme'));
+    expect(company).toBeTruthy();
+    const [cred] = await ctx.db.select().from(appCredentials);
+    expect(cred.secretCiphertext).not.toContain('SA_SENTINEL');
+    const audits = await ctx.db.select().from(auditLog).where(eq(auditLog.action, 'credential_save'));
+    expect(audits).toHaveLength(1);
+  });
+
+  it('reports bad rows in errors[] without partial writes', async () => {
+    const csv = 'company,app,provider,platform,sa_json_file\nAcme,Shopper,fcm,android,absent.json\n';
+    const res = await ctx.$fetch('/api/imports/credentials', {
+      method: 'POST', body: form(csv, {}), headers: { 'x-csrf-token': ctx.csrf },
+    });
+    expect(res).toMatchObject({ created: 0, failed: 1, errors: [{ rowNumber: 1, reason: 'SA_FILE_MISSING' }] });
+    expect(await ctx.db.select().from(appCredentials)).toHaveLength(0);
+  });
+
+  it('rejects an unauthenticated request with 401', async () => {
+    await expect(ctx.anonFetch('/api/imports/credentials', { method: 'POST', body: form('company\nAcme\n', {}) }))
+      .rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('rejects a missing CSRF token with 403', async () => {
+    await expect(ctx.$fetch('/api/imports/credentials', { method: 'POST', body: form('company\nAcme\n', {}) }))
+      .rejects.toMatchObject({ statusCode: 403 });
+  });
+  ```
+
+- [ ] **Step 2: Run it — expect failure (route missing).**
+  Command: `npx vitest run test/integration/api/credentials-import.post.test.ts`
+  Expected: FAIL — 404 / `Cannot find` for `/api/imports/credentials`.
+
+- [ ] **Step 3: Implement the multipart route `server/api/imports/credentials.post.ts`.**
+  ```ts
+  import { createError, readMultipartFormData, defineEventHandler } from 'h3';
+  import { requireUser } from '~/server/utils/session';   // same guard M3.3 uses
+  import { assertCsrf } from '~/server/utils/csrf';        // same guard M3.3 uses
+  import { importCredentials } from '~/server/utils/import/credentials';
+
+  export default defineEventHandler(async (event) => {
+    const session = await requireUser(event);   // throws 401 if absent; admin or operator
+    assertCsrf(event);                          // throws 403 on bad/missing token
+    const parts = await readMultipartFormData(event);
+    if (!parts) throw createError({ statusCode: 400, statusMessage: 'multipart body required' });
+
+    const manifestPart = parts.find((p) => p.name === 'manifest');
+    if (!manifestPart?.data) throw createError({ statusCode: 400, statusMessage: 'manifest CSV is required' });
+
+    // Every non-manifest part is an uploaded .json keyed by its part name (the sa_json_file filename).
+    const files: Record<string, string> = {};
+    for (const p of parts) {
+      if (p.name && p.name !== 'manifest' && p.data) files[p.name] = p.data.toString('utf-8');
+    }
+
+    return await importCredentials({
+      userId: session.userId,
+      manifestCsv: manifestPart.data.toString('utf-8'),
+      files,
+    });
+  });
+  ```
+
+- [ ] **Step 4: Run it — expect pass.**
+  Command: `npx vitest run test/integration/api/credentials-import.post.test.ts`
+  Expected: PASS (4 tests).
+
+- [ ] **Step 5: Write the failing component test for the panel.**
+  Create `test/component/credentials-import-page.test.ts`:
+  ```ts
+  import { describe, it, expect, vi, beforeEach } from 'vitest';
+  import { mount, flushPromises } from '@vue/test-utils';
+  import CredentialsImportPage from '~/app/pages/imports/credentials.vue';
+
+  beforeEach(() => {
+    vi.stubGlobal('$fetch', vi.fn(async () => ({ created: 2, updated: 1, failed: 1, errors: [{ rowNumber: 4, reason: 'SA_FILE_MISSING' }] })));
+  });
+
+  it('uploads manifest + json files and renders the result summary including errors', async () => {
+    const wrapper = mount(CredentialsImportPage);
+    const manifest = new File(['company,app,provider,platform,sa_json_file\nAcme,Shopper,fcm,android,acme.json\n'], 'manifest.csv', { type: 'text/csv' });
+    const json = new File(['{}'], 'acme.json', { type: 'application/json' });
+
+    Object.defineProperty(wrapper.get('[data-test="manifest-input"]').element, 'files', { value: [manifest], configurable: true });
+    await wrapper.get('[data-test="manifest-input"]').trigger('change');
+    Object.defineProperty(wrapper.get('[data-test="json-input"]').element, 'files', { value: [json], configurable: true });
+    await wrapper.get('[data-test="json-input"]').trigger('change');
+
+    await wrapper.get('[data-test="import-btn"]').trigger('click');
+    await flushPromises();
+
+    expect(globalThis.$fetch).toHaveBeenCalledWith('/api/imports/credentials', expect.objectContaining({ method: 'POST' }));
+    const summary = wrapper.get('[data-test="import-summary"]').text();
+    expect(summary).toContain('2');   // created
+    expect(summary).toContain('1');   // updated / failed
+    expect(wrapper.get('[data-test="import-errors"]').text()).toMatch(/SA_FILE_MISSING/);
+  });
+  ```
+
+- [ ] **Step 6: Run it — expect failure (page missing).**
+  Command: `npx vitest run test/component/credentials-import-page.test.ts`
+  Expected: fails to resolve `~/app/pages/imports/credentials.vue`.
+
+- [ ] **Step 7: Implement `app/composables/useCredentialImport.ts`.**
+  ```ts
+  import type { CredImportResult } from '~/server/utils/import/credentials';
+
+  export function useCredentialImport() {
+    function submit(manifest: File, jsonFiles: File[]): Promise<CredImportResult> {
+      const fd = new FormData();
+      fd.set('manifest', manifest, manifest.name);
+      for (const f of jsonFiles) fd.append(f.name, f, f.name);
+      return $fetch<CredImportResult>('/api/imports/credentials', { method: 'POST', body: fd });
+    }
+    return { submit };
+  }
+  ```
+
+- [ ] **Step 8: Implement `app/pages/imports/credentials.vue`.**
+  ```vue
+  <script setup lang="ts">
+  import { ref } from 'vue';
+  import { useCredentialImport } from '~/app/composables/useCredentialImport';
+  import type { CredImportResult } from '~/server/utils/import/credentials';
+
+  const { submit } = useCredentialImport();
+  const manifest = ref<File | null>(null);
+  const jsonFiles = ref<File[]>([]);
+  const result = ref<CredImportResult | null>(null);
+  const busy = ref(false);
+
+  function onManifest(e: Event) {
+    const f = (e.target as HTMLInputElement).files?.[0] ?? null;
+    manifest.value = f;
+  }
+  function onJsonFiles(e: Event) {
+    jsonFiles.value = Array.from((e.target as HTMLInputElement).files ?? []);
+  }
+  async function onImport() {
+    if (!manifest.value) return;
+    busy.value = true;
+    try {
+      result.value = await submit(manifest.value, jsonFiles.value);
+    } finally {
+      busy.value = false;
+    }
+  }
+  </script>
+
+  <template>
+    <section>
+      <h1>Import credentials</h1>
+      <p>Upload a CSV manifest plus the FCM service-account <code>.json</code> files it references.</p>
+
+      <label>Manifest CSV
+        <input type="file" accept=".csv,text/csv" data-test="manifest-input" @change="onManifest" />
+      </label>
+      <label>Service-account JSON files
+        <input type="file" accept=".json,application/json" multiple data-test="json-input" @change="onJsonFiles" />
+      </label>
+      <button type="button" data-test="import-btn" :disabled="!manifest || busy" @click="onImport">Import</button>
+
+      <div v-if="result" data-test="import-summary">
+        <p>Created: {{ result.created }} · Updated: {{ result.updated }} · Failed: {{ result.failed }}</p>
+        <ul v-if="result.errors.length" data-test="import-errors">
+          <li v-for="e in result.errors" :key="e.rowNumber">Row {{ e.rowNumber }}: {{ e.reason }}</li>
+        </ul>
+      </div>
+    </section>
+  </template>
+  ```
+
+- [ ] **Step 9: Run the component test — expect pass.**
+  Command: `npx vitest run test/component/credentials-import-page.test.ts`
+  Expected: PASS (1 test — uploads both inputs, POSTs to `/api/imports/credentials`, renders the summary and errors).
+
+- [ ] **Step 10: Run both new suites to confirm no regressions.**
+  Command: `npx vitest run test/integration/api/credentials-import.post.test.ts test/component/credentials-import-page.test.ts`
+  Expected: all green (4 + 1 tests).
+
+- [ ] **Step 11: Commit.**
+  ```bash
+  git add server/api/imports/credentials.post.ts app/pages/imports/credentials.vue app/composables/useCredentialImport.ts test/integration/api/credentials-import.post.test.ts test/component/credentials-import-page.test.ts
+  git commit -m "M3.9: POST /api/imports/credentials multipart route + Import credentials UI panel
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+  ```
+
+---
+
 ## M4 — Devices, import pipeline & app-ingest keys
 
 **Goal:** Build the managed-audience layer — devices with NOT NULL `provider`/`platform`, a first-class CSV/JSON import pipeline (column-mapping, provider/platform consistency validation, unroutable-row rejection, upsert by `(app_id, token)`), and per-app ingest keys plus a bearer-authenticated token-registration endpoint.
@@ -7988,24 +8518,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"`
   `git add test/integration/m4-e2e.test.ts && git commit -m "M4: end-to-end acceptance tests (import rejection, ingest auth/binding/whitelist/revoke, audit)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"`
-```
 
 Note on the coverage-gap list: of the five gaps flagged, none belong to milestone M4 — master-key rotation and user-management (§11) are admin features, FCM Retry-After wiring and Huawei `click_action.type:1`/`80300010` handling are M5/M6 send-pipeline concerns. They are correctly out of scope here and were not added as M4 tasks; they belong to the milestones that build those routes/adapters (and to fixing M7.3's coverage test, which currently assumes pre-existing routes that no milestone builds).
 
 ---
 
-I'll apply the review fixes to the M5 milestone markdown. Let me work through each fix systematically.
-
-The key fixes are:
-1. **isReady flag-name convergence**: Change `apns_ready`/`vapid_ready`/`push_kit_enabled` to match M3's `apns_p8_uploaded`/`vapid_present`/`push_kit_enabled` (converge on M3's keys).
-2. **Pin Huawei secret shape**: `{ appId, appSecret, projectId? }` and use `meta.project_id` for v2 URL selection.
-3. **FCM Retry-After extraction**: populate `responseMeta.retryAfterMs` in send() error mapping.
-4. **Add FCM mintToken test** for parity with Huawei.
-5. **Handle 80300010 as FIX_REQUEST** (not default RETRY_BACKOFF).
-
-Let me produce the corrected markdown.
-
-```markdown
 ## M5 — Provider adapters + per-credential token cache
 
 **Goal:** Implement the `PushProvider` interface, a per-credential in-memory access-token cache with proactive refresh, and both `FcmAdapter` and `HuaweiAdapter` — each rendering a `NeutralMessage`, chunking to vendor limits, pacing concurrency/QPS, and normalizing provider errors into the `Disposition` union and `DeliveryResult`.
@@ -9527,25 +10044,8 @@ Steps:
   ```
   git add server/utils/push/adapters-parity.test.ts && git commit -m "M5.7: cross-adapter DeliveryResult/Disposition parity verification across full case matrix"
   ```
-```
 
 ---
-
-I'll apply the review fixes. The key changes: rename helpers to canonical M1 names (`readSession`/`verifyDoubleSubmit`), fix the e2e test auth to use real session helpers, confirm import paths, handle the Retry-After wiring, and ensure the not_ready disposition string is exact.
-
-Let me work through the fixes systematically and output the corrected milestone.
-
-The decisions on the ambiguous fixes:
-- **Registry/factory name**: Shared Contracts list nothing, so I'll keep `getProvider` (already used consistently in M6 and matches the dependency declaration). I'll keep the registry export name `getProvider` and ensure all M6 imports use it. No M5.6 rename needed from M6's side — I just keep M6 internally consistent on `getProvider`.
-- **Session/CSRF helpers**: rename `requireSession`→`readSession`, `requireCsrf`→`verifyDoubleSubmit` to match M1.
-- **E2E auth**: replace the undefined `x-test-user` shortcut with M1's `seedUser`/`authedFetch` helpers.
-- **Retry-After**: drop the claim of populating `retryAfterMs` from the adapter (no adapter sets it), but keep `nextRunAfter` supporting an explicit `retryAfterMs` arg; the worker passes `undefined` and a comment notes it's reserved until an adapter populates it.
-
-Here is the corrected milestone markdown.
-
-The project is greenfield — only the spec docs exist. M6 depends on prior milestones (M1-M5: schema, crypto, adapters, credentials, queue primitives, devices). I'll write M6 tasks that reference those contracts as already-built dependencies, and assume a test Postgres is available (via docker compose as designed) for DB integration tests, with pg-mem noted where pure-unit testing is viable.
-
-I have everything I need. Here is the milestone.
 
 ## M6 — Send pipeline + compose UI + history
 
@@ -11496,22 +11996,6 @@ This task is verification-only: it exercises the full compose→send→history l
 
 ---
 
-Now I'll produce the corrected milestone markdown. The key fixes:
-
-1. The user-management routes are built in Task M1.12 and the master-key rotation route in Task M3.7; M7.3's audit-coverage pass consumes those existing routes rather than rebuilding them.
-2. Define `stubAuthedEvent`/`stubIngestEvent`/`seedAdminAndApp` rather than referencing nonexistent M1 utils, OR rewrite against real harness — I'll define them.
-3. Align env vars to `NUXT_DATABASE_URL`/`NUXT_BO_MASTER_KEY` and master-key versioned format `<version>:<base64>`.
-4. Fix restore-roundtrip to use versioned key.
-5. Fix readiness flag to `push_kit_enabled` (snake_case).
-6. Fix CSRF mint route to `GET /api/auth/csrf`.
-7. Wire `logSafe` into adapters (add a task) or scope test — I'll add adapter-wiring task and keep the unit test.
-
-Here is the corrected milestone markdown:
-
----
-
-The repo currently only has `docs/` and `.git`. The implementation tasks for M7 will be authored against the conventions established by M1-M6 (Nuxt 4 + Nitro, Vitest, Drizzle, the `server/` tree from the shared contracts). I have everything needed to write the milestone.
-
 ## M7 — Backup/restore + hardening
 
 **Goal:** Make the system documented, restorable, and production-ready: a `pg_dump` backup script, a restore runbook paired with the master-key separate-backup note, finalized audit-taxonomy coverage over the user-management (M1.12) and master-key-rotation (M3.7) routes their audit actions require, and a cross-OS smoke checklist.
@@ -11796,7 +12280,6 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   Expected: `1 passed` — restored ciphertext decrypts to the exact original plaintext under the original `NUXT_BO_MASTER_KEY`.
 
 - [ ] **Step 5: Write the restore runbook.** Create `docs/RESTORE.md`:
-  ```markdown
   # Restore Runbook — Firebase Center
 
   > A DB backup is **useless on its own**. Restoring a working system requires
@@ -12340,7 +12823,6 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   Expected: `1 passed` — every marker present (`CSRF_OK` included); deliveries recorded `sent=2 failed=0` against the mock; a `.dump` exists.
 
 - [ ] **Step 6: Write the human checklist.** Create `docs/SMOKE.md` documenting the manual cross-OS run (the script is the automatable core; this captures the OS-specific bring-up + the manual eyeball steps):
-  ```markdown
   # Cross-OS Smoke Checklist — Firebase Center
 
   Run on each target OS before declaring a release production-ready. The scripted
