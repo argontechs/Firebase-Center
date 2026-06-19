@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
-import { db, truncate, closeDb } from '~/server/test/db';
-import { seedUser } from '~/server/test/auth';
-import { createSession } from '~/server/utils/auth/session';
+import { db, truncate, closeDb } from '~~/server/test/db';
+import { seedUser } from '~~/server/test/auth';
+import { createSession } from '~~/server/utils/auth/session';
 
 vi.mock('#imports', () => ({ useRuntimeConfig: () => ({ allowedOrigins: ['https://bo.example.com'] }) }), { virtual: true });
 vi.mock('h3', () => ({

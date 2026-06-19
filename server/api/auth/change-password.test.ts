@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { db, truncate, closeDb } from '~/server/test/db';
-import { users, auditLog, sessions } from '~/server/db/schema';
-import { hashPassword } from '~/server/utils/auth/password';
-import { createSession } from '~/server/utils/auth/session';
+import { db, truncate, closeDb } from '~~/server/test/db';
+import { users, auditLog, sessions } from '~~/server/db/schema';
+import { hashPassword } from '~~/server/utils/auth/password';
+import { createSession } from '~~/server/utils/auth/session';
 
 // Stub Nuxt's #imports so guard.ts (requireSession) can be imported without Nuxt runtime.
 vi.mock('#imports', () => ({ useRuntimeConfig: () => ({ allowedOrigins: ['https://localhost:3000'] }) }), { virtual: true });

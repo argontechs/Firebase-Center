@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
-import { db, truncate, closeDb } from '~/server/test/db';
-import { auditLog } from '~/server/db/schema';
+import { db, truncate, closeDb } from '~~/server/test/db';
+import { auditLog } from '~~/server/db/schema';
 import { audit } from './audit';
 
 beforeEach(async () => { await truncate('audit_log', 'users'); });

@@ -1,6 +1,6 @@
-import { db } from '~/server/db/client';
-import { users } from '~/server/db/schema';
-import { hashPassword } from '~/server/utils/auth/password';
+import { db } from '~~/server/db/client';
+import { users } from '~~/server/db/schema';
+import { hashPassword } from '~~/server/utils/auth/password';
 
 let counter = 0;
 

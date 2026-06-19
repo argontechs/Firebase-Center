@@ -2,8 +2,8 @@ import type { H3Event } from 'h3';
 import { eq } from 'drizzle-orm';
 import { getCookie, getRequestHeader, createError } from 'h3';
 import { useRuntimeConfig } from '#imports';
-import { db } from '~/server/db/client';
-import { users } from '~/server/db/schema';
+import { db } from '~~/server/db/client';
+import { users } from '~~/server/db/schema';
 import { readSession, SESSION_COOKIE_NAME } from './session';
 import { verifyDoubleSubmit, verifyOrigin, CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from './csrf';
 

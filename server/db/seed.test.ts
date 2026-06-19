@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import { db, truncate, closeDb } from '~/server/test/db';
-import { users } from '~/server/db/schema';
-import { hashPassword } from '~/server/utils/auth/password';
+import { db, truncate, closeDb } from '~~/server/test/db';
+import { users } from '~~/server/db/schema';
+import { hashPassword } from '~~/server/utils/auth/password';
 import { seedFirstAdmin, validatePasswordStrength, SeedError } from './seed';
 
 const goodEnv = { BO_ADMIN_EMAIL: 'admin@bo.com', BO_ADMIN_PASSWORD: 'Str0ng-Passw0rd!' };

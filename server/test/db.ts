@@ -1,7 +1,7 @@
 process.env.NUXT_DATABASE_URL ??= 'postgres://fc:fc@localhost:55432/firebase_center_test';
 import { sql } from 'drizzle-orm';
 import { toNodeListener, createApp, createRouter, eventHandler } from 'h3';
-import { db, pool } from '~/server/db/client';
+import { db, pool } from '~~/server/db/client';
 
 export { db };
 
@@ -34,12 +34,12 @@ export async function makeTestApp() {
     { default: changePasswordPost },
     { default: csrfGet },
   ] = await Promise.all([
-    import('~/server/middleware/auth'),
-    import('~/server/api/auth/login.post'),
-    import('~/server/api/auth/me.get'),
-    import('~/server/api/auth/logout.post'),
-    import('~/server/api/auth/change-password.post'),
-    import('~/server/api/auth/csrf.get'),
+    import('~~/server/middleware/auth'),
+    import('~~/server/api/auth/login.post'),
+    import('~~/server/api/auth/me.get'),
+    import('~~/server/api/auth/logout.post'),
+    import('~~/server/api/auth/change-password.post'),
+    import('~~/server/api/auth/csrf.get'),
   ]);
 
   const app = createApp();

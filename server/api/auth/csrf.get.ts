@@ -1,5 +1,5 @@
 import { setResponseHeader, defineEventHandler } from 'h3';
-import { issueCsrfToken, serializeCsrfCookie } from '~/server/utils/auth/csrf';
+import { issueCsrfToken, serializeCsrfCookie } from '~~/server/utils/auth/csrf';
 
 export default defineEventHandler((event) => {
   const token = issueCsrfToken();

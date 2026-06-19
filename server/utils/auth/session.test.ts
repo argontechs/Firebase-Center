@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
-import { db, truncate, closeDb } from '~/server/test/db';
-import { seedUser } from '~/server/test/auth';
+import { db, truncate, closeDb } from '~~/server/test/db';
+import { seedUser } from '~~/server/test/auth';
 import {
   createSession, readSession, destroySession, destroyAllSessionsForUser,
   serializeSessionCookie, clearSessionCookie, SESSION_COOKIE_NAME,

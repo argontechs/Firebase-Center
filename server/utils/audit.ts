@@ -1,5 +1,5 @@
-import { db } from '~/server/db/client';
-import { auditLog } from '~/server/db/schema';
+import { db } from '~~/server/db/client';
+import { auditLog } from '~~/server/db/schema';
 
 export type AuditAction =
   | 'login_success' | 'login_failure' | 'logout' | 'password_change'

@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { readBody, setResponseHeader, setResponseStatus, createError, defineEventHandler } from 'h3';
-import { db } from '~/server/db/client';
-import { users } from '~/server/db/schema';
-import { hashPassword, verifyPassword } from '~/server/utils/auth/password';
-import { validatePasswordStrength } from '~/server/db/seed';
-import { requireUser } from '~/server/utils/auth/guard';
-import { destroyAllSessionsForUser, createSession } from '~/server/utils/auth/session';
-import { audit } from '~/server/utils/audit';
+import { db } from '~~/server/db/client';
+import { users } from '~~/server/db/schema';
+import { hashPassword, verifyPassword } from '~~/server/utils/auth/password';
+import { validatePasswordStrength } from '~~/server/db/seed';
+import { requireUser } from '~~/server/utils/auth/guard';
+import { destroyAllSessionsForUser, createSession } from '~~/server/utils/auth/session';
+import { audit } from '~~/server/utils/audit';
 
 const Body = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(1) });
 

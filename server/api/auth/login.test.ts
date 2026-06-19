@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
-import { db, truncate, closeDb } from '~/server/test/db';
-import { users, auditLog } from '~/server/db/schema';
+import { db, truncate, closeDb } from '~~/server/test/db';
+import { users, auditLog } from '~~/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { hashPassword } from '~/server/utils/auth/password';
-import { resetRateLimitStore } from '~/server/utils/auth/rate-limit';
+import { hashPassword } from '~~/server/utils/auth/password';
+import { resetRateLimitStore } from '~~/server/utils/auth/rate-limit';
 
 // Stub Nuxt's #imports so guard.ts (requireUser) can be imported without Nuxt runtime.
 vi.mock('#imports', () => ({ useRuntimeConfig: () => ({ allowedOrigins: ['https://localhost:3000'] }) }), { virtual: true });

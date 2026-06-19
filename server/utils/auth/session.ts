@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { and, eq, gt } from 'drizzle-orm';
-import { db } from '~/server/db/client';
-import { sessions } from '~/server/db/schema';
+import { db } from '~~/server/db/client';
+import { sessions } from '~~/server/db/schema';
 
 export const SESSION_COOKIE_NAME = 'bo_session';
 export const IDLE_TIMEOUT_MS = 30 * 60 * 1000;          // 30 min sliding

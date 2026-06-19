@@ -1,6 +1,6 @@
 import { defineEventHandler, getCookie, setResponseHeader } from 'h3';
-import { requireUser } from '~/server/utils/auth/guard';
-import { SESSION_COOKIE_NAME, IDLE_TIMEOUT_MS, serializeSessionCookie } from '~/server/utils/auth/session';
+import { requireUser } from '~~/server/utils/auth/guard';
+import { SESSION_COOKIE_NAME, IDLE_TIMEOUT_MS, serializeSessionCookie } from '~~/server/utils/auth/session';
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event);   // throws 401 when no session / disabled
