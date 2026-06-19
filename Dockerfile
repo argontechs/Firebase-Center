@@ -11,6 +11,8 @@ RUN pnpm run build
 FROM node:22.12.0-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client \
+  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 # bring the built server, prod deps, and the migrate/seed tooling (tsx, drizzle-kit)
 COPY package.json pnpm-lock.yaml ./
