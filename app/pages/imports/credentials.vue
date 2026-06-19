@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useCredentialImport } from '~/app/composables/useCredentialImport';
+import { useCredentialImport } from '~/composables/useCredentialImport';
 import type { CredImportResult } from '~~/server/utils/import/credentials';
 
 const { submit } = useCredentialImport();
