@@ -5,7 +5,7 @@ export type AuditAction =
   | 'login_success' | 'login_failure' | 'logout' | 'password_change'
   | 'user_create' | 'user_disable' | 'role_change' | 'master_key_rotation'
   | 'ingest_key_issue' | 'ingest_key_revoke'
-  | 'send_key_issue' | 'send_key_revoke'
+  | 'send_key_issue' | 'send_key_rotate' | 'send_key_revoke'
   | 'credential_save' | 'credential_rotate'
   | 'campaign_send' | 'import_run';
 

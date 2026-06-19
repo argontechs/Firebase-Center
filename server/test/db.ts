@@ -64,6 +64,11 @@ export async function makeTestApp() {
     // M6.7: campaign read routes
     { default: campaignsGet },
     { default: campaignGet },
+    // SA.2: send-key management routes
+    { default: sendKeysPost },
+    { default: sendKeysGet },
+    { default: sendKeyRevokePost },
+    { default: sendKeyRotatePost },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -102,6 +107,11 @@ export async function makeTestApp() {
     // M6.7
     import('~~/server/api/campaigns/index.get'),
     import('~~/server/api/campaigns/[id].get'),
+    // SA.2: send-key management
+    import('~~/server/api/companies/[id]/send-keys/index.post'),
+    import('~~/server/api/companies/[id]/send-keys/index.get'),
+    import('~~/server/api/companies/[id]/send-keys/[kid]/revoke.post'),
+    import('~~/server/api/companies/[id]/send-keys/[kid]/rotate.post'),
   ]);
 
   const app = createApp();
@@ -144,6 +154,11 @@ export async function makeTestApp() {
   // M6.7: campaign read
   router.get('/api/campaigns', eventHandler(campaignsGet));
   router.get('/api/campaigns/:id', eventHandler(campaignGet));
+  // SA.2: send-key management
+  router.post('/api/companies/:id/send-keys', eventHandler(sendKeysPost));
+  router.get('/api/companies/:id/send-keys', eventHandler(sendKeysGet));
+  router.post('/api/companies/:id/send-keys/:kid/revoke', eventHandler(sendKeyRevokePost));
+  router.post('/api/companies/:id/send-keys/:kid/rotate', eventHandler(sendKeyRotatePost));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
