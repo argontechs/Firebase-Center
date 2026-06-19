@@ -39,6 +39,12 @@ export async function makeTestApp() {
     { default: companyGet },
     { default: companyPatch },
     { default: companyDelete },
+    // M2.3: app CRUD
+    { default: appsGet },
+    { default: appsPost },
+    { default: appGet },
+    { default: appPatch },
+    { default: appDelete },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -52,6 +58,12 @@ export async function makeTestApp() {
     import('~~/server/api/companies/[id].get'),
     import('~~/server/api/companies/[id].patch'),
     import('~~/server/api/companies/[id].delete'),
+    // M2.3
+    import('~~/server/api/apps/index.get'),
+    import('~~/server/api/apps/index.post'),
+    import('~~/server/api/apps/[id].get'),
+    import('~~/server/api/apps/[id].patch'),
+    import('~~/server/api/apps/[id].delete'),
   ]);
 
   const app = createApp();
@@ -69,6 +81,12 @@ export async function makeTestApp() {
   router.get('/api/companies/:id', eventHandler(companyGet));
   router.patch('/api/companies/:id', eventHandler(companyPatch));
   router.delete('/api/companies/:id', eventHandler(companyDelete));
+  // M2.3: app CRUD
+  router.get('/api/apps', eventHandler(appsGet));
+  router.post('/api/apps', eventHandler(appsPost));
+  router.get('/api/apps/:id', eventHandler(appGet));
+  router.patch('/api/apps/:id', eventHandler(appPatch));
+  router.delete('/api/apps/:id', eventHandler(appDelete));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
