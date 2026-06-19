@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const cid = getRouterParam(event, 'cid')!;
   const body = await readBody<{ secret: string; meta?: Record<string, unknown> }>(event);
   try {
-    return await rotateCredential({ appId, credentialId: cid, userId: session.id, secret: body.secret, meta: body.meta });
+    return await rotateCredential({ appId, credentialId: cid, userId: session.id, secret: body?.secret, meta: body?.meta });
   } catch (err: any) {
     if (/not found/i.test(String(err?.message))) throw createError({ statusCode: 404, statusMessage: 'Credential not found' });
     if (/secret is required/i.test(String(err?.message))) throw createError({ statusCode: 400, statusMessage: err.message });

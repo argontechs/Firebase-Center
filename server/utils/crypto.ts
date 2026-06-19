@@ -1,4 +1,4 @@
-import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'node:crypto';
+import { randomBytes, createCipheriv, createDecipheriv, createHmac } from 'node:crypto';
 
 export interface EncryptedSecret {
   ciphertext: string; // base64
@@ -64,8 +64,7 @@ export function decryptSecret(enc: EncryptedSecret): string {
 export function fingerprint(plaintext: string): string {
   const keys = loadKeys();
   const key = keys.get(currentVersion(keys))!;
-  return createHash('sha256')
-    .update(key)
+  return createHmac('sha256', key)
     .update('\x00fp\x00')
     .update(plaintext, 'utf8')
     .digest('hex')
