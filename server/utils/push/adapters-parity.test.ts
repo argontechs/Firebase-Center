@@ -61,8 +61,8 @@ describe('adapter parity: every non-sent result carries a disposition', () => {
         { success: false, error: { code: 'messaging/payload-size-limit-exceeded' } },
       ] })
       .mockResolvedValueOnce({ responses: [
-        { success: false, error: { code: 'messaging/quota-exceeded' } },
-        { success: false, error: { code: 'messaging/quota-exceeded' } },
+        { success: false, error: { code: 'messaging/message-rate-exceeded' } },
+        { success: false, error: { code: 'messaging/message-rate-exceeded' } },
       ] });
     const wire = fcmAdapter.render(NEUTRAL);
     assertNonSentHaveDisposition(await fcmAdapter.send(fcmCred, wire, two)); // sent
@@ -78,6 +78,7 @@ describe('adapter parity: every non-sent result carries a disposition', () => {
     const cases: Array<[unknown, (r: DeliveryResult[]) => void]> = [
       [{ code: '80000000', requestId: 'r' }, (r) => expect(r.every((x) => x.status === 'sent')).toBe(true)],
       [{ code: '80300007', requestId: 'r' }, (r) => expect(r.every((x) => x.disposition === 'DELETE_TOKEN')).toBe(true)],
+      [{ code: '80300002', requestId: 'r' }, (r) => expect(r.every((x) => x.disposition === 'DELETE_TOKEN')).toBe(true)],
       [{ code: '80300008', requestId: 'r' }, (r) => expect(r.every((x) => x.disposition === 'FIX_REQUEST')).toBe(true)],
       [{ code: '80200001', requestId: 'r' }, (r) => expect(r.every((x) => x.disposition === 'REAUTH')).toBe(true)],
       [{ code: '81000001', requestId: 'r' }, (r) => expect(r.every((x) => x.disposition === 'RETRY_BACKOFF')).toBe(true)],
