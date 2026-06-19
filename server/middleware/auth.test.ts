@@ -78,4 +78,37 @@ describe('server auth guard', () => {
     await guard(e);                       // no CSRF token, but must not 403
     expect(e.context.user).toBeDefined();
   });
+
+  // Finding: mustChangePassword enforcement (M1.10 code-review)
+  it('403s a state-changing POST when mustChangePassword=true (bypass gate)', async () => {
+    const { id: uid } = await seedUser({ mustChangePassword: true });
+    const { sessionId } = await createSession(uid);
+    const e = evt({ path: '/api/companies', method: 'POST', cookies: { bo_session: sessionId, bo_csrf: 'tok' }, headers: { origin: 'https://bo.example.com', 'x-csrf-token': 'tok' } });
+    await expect(guard(e)).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('allows GET through when mustChangePassword=true (reads still permitted)', async () => {
+    const { id: uid } = await seedUser({ mustChangePassword: true });
+    const { sessionId } = await createSession(uid);
+    const e = evt({ path: '/api/companies', cookies: { bo_session: sessionId } });
+    await guard(e);
+    expect(e.context.user.id).toBe(uid);
+  });
+
+  it('allows POST /api/auth/change-password when mustChangePassword=true (the escape hatch)', async () => {
+    const { id: uid } = await seedUser({ mustChangePassword: true });
+    const { sessionId } = await createSession(uid);
+    const e = evt({ path: '/api/auth/change-password', method: 'POST', cookies: { bo_session: sessionId }, headers: { origin: 'https://bo.example.com' } });
+    await guard(e);   // CSRF-exempt AND mustChangePassword-exempt
+    expect(e.context.user).toBeDefined();
+  });
+
+  // Finding: APP_INGEST_DEVICE should require Authorization header (M1.10 code-review)
+  it('401s POST /api/apps/:id/devices with no Authorization header', async () => {
+    await expect(guard(evt({ path: '/api/apps/abc/devices', method: 'POST' }))).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('401s POST /api/apps/:id/devices with non-Bearer Authorization', async () => {
+    await expect(guard(evt({ path: '/api/apps/abc/devices', method: 'POST', headers: { authorization: 'Basic dXNlcjpwYXNz' } }))).rejects.toMatchObject({ statusCode: 401 });
+  });
 });
