@@ -1,48 +1,43 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { db, truncate, closeDb } from '~/server/test/db';
+import { users } from '~/server/db/schema';
+import { hashPassword } from '~/server/utils/auth/password';
+import { seedFirstAdmin, validatePasswordStrength, SeedError } from './seed';
 
-// Injected count used by seedFirstAdmin (no real DB).
-const state = { userCount: 0 };
+const goodEnv = { BO_ADMIN_EMAIL: 'admin@bo.com', BO_ADMIN_PASSWORD: 'Str0ng-Passw0rd!' };
+beforeEach(async () => { await truncate('sessions', 'audit_log', 'users'); });
+afterAll(async () => { await closeDb(); });
 
-vi.mock('./client', () => ({
-  db: {
-    // seedFirstAdmin uses this hook in tests instead of a real select count.
-    async _countUsers() { return state.userCount; },
-  },
-  pool: { end: async () => {} },
-  schema: {},
-}));
-
-vi.mock('drizzle-orm', async (orig) => {
-  const actual = await orig<typeof import('drizzle-orm')>();
-  return actual;
-});
-
-import { seedFirstAdmin, SeedError } from './seed';
-
-describe('seedFirstAdmin (idempotent)', () => {
-  beforeEach(() => {
-    state.userCount = 0;
-    process.env.NUXT_BO_ADMIN_EMAIL = 'admin@example.com';
-    process.env.NUXT_BO_ADMIN_PASSWORD = 'strong_password_123456';
-  });
-
-  it('seeds when the users table is empty', async () => {
-    state.userCount = 0;
-    const r = await seedFirstAdmin();
+describe('seedFirstAdmin', () => {
+  it('seeds an admin with mustChangePassword when users empty', async () => {
+    const r = await seedFirstAdmin(goodEnv);
     expect(r.seeded).toBe(true);
+    const rows = await db.select().from(users);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].role).toBe('admin');
+    expect(rows[0].mustChangePassword).toBe(true);
+    expect(rows[0].passwordHash).not.toBe('Str0ng-Passw0rd!');
   });
 
-  it('is a no-op when a user already exists', async () => {
-    state.userCount = 1;
-    const r = await seedFirstAdmin();
+  it('is idempotent — no reseed when an admin already exists', async () => {
+    await db.insert(users).values({ email: 'existing@bo.com', passwordHash: await hashPassword('x'), role: 'admin' });
+    const r = await seedFirstAdmin(goodEnv);
     expect(r.seeded).toBe(false);
+    expect(await db.select().from(users)).toHaveLength(1);
   });
 
-  it('throws a SeedError mentioning BO_ADMIN when users is empty AND admin env is unset', async () => {
-    state.userCount = 0;
-    delete process.env.NUXT_BO_ADMIN_EMAIL;
-    delete process.env.NUXT_BO_ADMIN_PASSWORD;
-    await expect(seedFirstAdmin()).rejects.toBeInstanceOf(SeedError);
-    await expect(seedFirstAdmin()).rejects.toThrow(/BO_ADMIN/);
+  it('fails loudly when users empty and env unset', async () => {
+    await expect(seedFirstAdmin({})).rejects.toBeInstanceOf(SeedError);
+  });
+
+  it('fails loudly when the seed password is too weak', async () => {
+    await expect(seedFirstAdmin({ BO_ADMIN_EMAIL: 'a@b.com', BO_ADMIN_PASSWORD: 'weak' })).rejects.toBeInstanceOf(SeedError);
+  });
+
+  it('validatePasswordStrength enforces length + classes', () => {
+    expect(validatePasswordStrength('Str0ng-Passw0rd!').ok).toBe(true);
+    expect(validatePasswordStrength('short1!A').ok).toBe(false);
+    expect(validatePasswordStrength('alllowercase123!').ok).toBe(false);
+    expect(validatePasswordStrength('NoSymbol1234A').ok).toBe(false);
   });
 });

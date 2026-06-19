@@ -1,10 +1,8 @@
+import { sql } from 'drizzle-orm';
 import { db } from './client';
+import { users } from './schema';
+import { hashPassword } from '~/server/utils/auth/password';
 
-/**
- * Canonical loud-fail type for the first-admin seed. Thrown here AND extended (not replaced)
- * by M1.6, so the entrypoint path and M1.11's integration assertion
- * (`rejects.toBeInstanceOf(SeedError)`) stay consistent across milestones.
- */
 export class SeedError extends Error {
   constructor(message: string) {
     super(message);
@@ -12,44 +10,40 @@ export class SeedError extends Error {
   }
 }
 
-/**
- * First-admin seed (design §11). Idempotent: seeds ONLY when the users table is empty;
- * later boots never reset an existing admin. If users is empty AND BO_ADMIN_* are unset,
- * fails loudly (SeedError) rather than coming up unloginnable.
- *
- * NOTE (M0): password hashing + the actual users-row insert land in M1.6, which EXTENDS this
- * file in place. The export surface here — SeedError, this signature, the empty-table check,
- * the /BO_ADMIN/ message, and the _countUsers test hook — is fixed; M1.6 only fills the
- * hashing-deferred `{ seeded: true }` branch and adds validatePasswordStrength.
- */
-export async function seedFirstAdmin(): Promise<{ seeded: boolean }> {
-  // Count via the injected helper in tests; real impl uses a select count.
-  const anyDb = db as unknown as { _countUsers?: () => Promise<number> };
-  const count = anyDb._countUsers
-    ? await anyDb._countUsers()
-    : await realUserCount();
-
-  if (count > 0) {
-    return { seeded: false };
-  }
-
-  const email = process.env.NUXT_BO_ADMIN_EMAIL;
-  const password = process.env.NUXT_BO_ADMIN_PASSWORD;
-  if (!email || !password) {
-    throw new SeedError(
-      'Refusing to boot: users table is empty but NUXT_BO_ADMIN_EMAIL / NUXT_BO_ADMIN_PASSWORD are unset. ' +
-        'Set the first-admin credentials so the BO comes up loginnable.',
-    );
-  }
-
-  // M1.6 will hash `password` (argon2id) and insert the users row here.
-  return { seeded: true };
+export function validatePasswordStrength(pw: string): { ok: true } | { ok: false; reason: string } {
+  if (pw.length < 12) return { ok: false, reason: 'must be at least 12 characters' };
+  if (!/[a-z]/.test(pw)) return { ok: false, reason: 'must contain a lowercase letter' };
+  if (!/[A-Z]/.test(pw)) return { ok: false, reason: 'must contain an uppercase letter' };
+  if (!/[0-9]/.test(pw)) return { ok: false, reason: 'must contain a digit' };
+  if (!/[^A-Za-z0-9]/.test(pw)) return { ok: false, reason: 'must contain a symbol' };
+  return { ok: true };
 }
 
-async function realUserCount(): Promise<number> {
-  const { users } = await import('./schema');
-  const rows = await db.select({ id: users.id }).from(users).limit(1);
-  return rows.length;
+export async function seedFirstAdmin(
+  env: { BO_ADMIN_EMAIL?: string; BO_ADMIN_PASSWORD?: string } = process.env,
+): Promise<{ seeded: boolean }> {
+  const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
+  if (count > 0) return { seeded: false };
+
+  const email = env.BO_ADMIN_EMAIL;
+  const password = env.BO_ADMIN_PASSWORD;
+  if (!email || !password) {
+    throw new SeedError(
+      'users table is empty and BO_ADMIN_EMAIL / BO_ADMIN_PASSWORD are not set — refusing to boot unloginnable',
+    );
+  }
+  const strength = validatePasswordStrength(password);
+  if (!strength.ok) {
+    throw new SeedError(`BO_ADMIN_PASSWORD ${strength.reason}`);
+  }
+  await db.insert(users).values({
+    email: email.toLowerCase(),
+    passwordHash: await hashPassword(password),
+    role: 'admin',
+    status: 'active',
+    mustChangePassword: true,
+  });
+  return { seeded: true };
 }
 
 // CLI entrypoint: `npm run db:seed`
