@@ -36,4 +36,19 @@ describe('nextRunAfter', () => {
       randomSpy.mockRestore();
     }
   });
+
+  it('delay can reach near-zero (true full jitter has no hard floor at exp)', () => {
+    // True full jitter: delay = floor(random() * exp). When random() returns 0,
+    // the delay should be 0 (no retryAfterMs). The previous buggy implementation
+    // computed delay = exp + jitter which had a floor at exp, never reaching 0.
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      const now = Date.now();
+      const d = nextRunAfter(5).getTime() - now;
+      // With random()=0: backoff = floor(0 * exp) = 0, delay = max(0, 0) = 0
+      expect(d).toBeLessThanOrEqual(10); // ~0ms (small tolerance for Date.now() drift)
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
 });
