@@ -9,6 +9,7 @@ import type {
   WireMessage,
 } from './types';
 import { validateHuaweiClickAction } from '~~/server/utils/payload';
+import { getAccessToken } from './token-cache';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -196,8 +197,8 @@ export const huaweiAdapter: PushProvider = {
    * Sends a push notification to all recipients via the Huawei Push Kit REST API.
    *
    * Key behaviors:
-   * - Mints a fresh access token per send() call (token-cache integration is the
-   *   caller's responsibility at the worker layer).
+   * - Obtains the access token via getAccessToken (shared token-cache), honoring
+   *   the <5-min proactive-refresh SLA; does NOT mint a fresh token on every call.
    * - Chunks recipients into groups of ≤1000 (Huawei's per-request limit).
    * - HTTP 200 does NOT mean success — always parse body.code.
    * - Self-imposes QPS_PACE_MS between chunks (Huawei gives no Retry-After header).
@@ -208,7 +209,7 @@ export const huaweiAdapter: PushProvider = {
     message: WireMessage,
     recipients: Recipient[],
   ): Promise<DeliveryResult[]> {
-    const access = await huaweiAdapter.mintToken(credential);
+    const accessToken = await getAccessToken(credential, (c) => huaweiAdapter.mintToken(c));
     const url = sendUrl(credential);
     const base = message.raw as { validate_only: boolean; message: Record<string, unknown> };
     const results: DeliveryResult[] = [];
@@ -224,7 +225,7 @@ export const huaweiAdapter: PushProvider = {
       const resp = await fetch(url, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${access.token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),

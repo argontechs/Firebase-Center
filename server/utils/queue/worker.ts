@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { resolveCredential } from '~~/server/utils/credentials/resolve';
 import { getAdapter } from '~~/server/utils/push/registry';
 import { getAccessToken } from '~~/server/utils/push/token-cache';
+import { validatePayloadSize } from '~~/server/utils/payload';
 import type { NeutralMessage, Recipient, DeliveryResult } from '~~/server/utils/push/types';
 import { type SendChunkPayload } from './types';
 
@@ -87,6 +88,7 @@ async function writeResults(
     };
   });
 
+  if (values.length === 0) return;
   await db.insert(deliveries).values(values);
 
   if (toInvalidate.length > 0) {
@@ -123,8 +125,10 @@ async function processSendChunk(job: typeof jobs.$inferSelect): Promise<void> {
   }
 
   const adapter = getAdapter(payload.provider);
+  const neutral = toNeutral(camp);
+  validatePayloadSize(neutral, payload.provider);
   await getAccessToken(resolved.credential, (c) => adapter.mintToken(c));
-  const wire = adapter.render(toNeutral(camp));
+  const wire = adapter.render(neutral);
   const recipients: Recipient[] = rows.map((d) => ({
     deviceId: d.id,
     token: d.token,

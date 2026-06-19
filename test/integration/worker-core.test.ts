@@ -8,6 +8,7 @@ import { enqueueCampaign } from '~~/server/utils/queue/enqueue';
 // Mock the credential resolver and provider registry so no real provider HTTP happens.
 const resolveCredentialMock = vi.fn();
 const sendMock = vi.fn();
+const renderMock = vi.fn((m: unknown) => ({ provider: 'fcm', raw: m }));
 vi.mock('~~/server/utils/credentials/resolve', () => ({
   resolveCredential: (...a: unknown[]) => resolveCredentialMock(...a),
   isReady: () => true,
@@ -15,14 +16,20 @@ vi.mock('~~/server/utils/credentials/resolve', () => ({
 vi.mock('~~/server/utils/push/registry', () => ({
   getAdapter: () => ({
     mintToken: vi.fn().mockResolvedValue({ token: 't', expiresAt: Date.now() + 3_600_000 }),
-    render: (m: unknown) => ({ provider: 'fcm', raw: m }),
+    render: (m: unknown) => renderMock(m),
     send: (...a: unknown[]) => sendMock(...a),
   }),
 }));
+const getAccessTokenMock = vi.fn().mockResolvedValue('access-token');
 vi.mock('~~/server/utils/push/token-cache', () => ({
-  getAccessToken: vi.fn().mockResolvedValue('access-token'),
+  getAccessToken: (...a: unknown[]) => getAccessTokenMock(...a),
   invalidateToken: vi.fn(),
 }));
+vi.mock('~~/server/utils/payload', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('~~/server/utils/payload')>();
+  return { ...actual, validatePayloadSize: vi.fn() };
+});
+const { validatePayloadSize } = await import('~~/server/utils/payload');
 
 const { claimNextJob, runWorkerOnce } = await import('~~/server/utils/queue/worker');
 
@@ -35,6 +42,9 @@ beforeEach(async () => {
   await truncateAll();
   resolveCredentialMock.mockReset().mockResolvedValue(readyCred);
   sendMock.mockReset();
+  renderMock.mockReset().mockImplementation((m: unknown) => ({ provider: 'fcm', raw: m }));
+  getAccessTokenMock.mockReset().mockResolvedValue('access-token');
+  vi.mocked(validatePayloadSize).mockReset();
 });
 
 describe('claimNextJob', () => {
@@ -119,5 +129,62 @@ describe('runWorkerOnce — happy path', () => {
 
   it('returns false when there is nothing to process', async () => {
     expect(await runWorkerOnce()).toBe(false);
+  });
+
+  it('calls validatePayloadSize before render — PayloadTooLargeError marks job failed without calling send', async () => {
+    const { PayloadTooLargeError } = await import('~~/server/utils/payload');
+    const { app } = await makeApp();
+    await makeDevice(app.id, { provider: 'fcm', platform: 'android', token: 'T1' });
+    const camp = await makeCampaign(app.id, { targetType: 'all' });
+    await enqueueCampaign(camp.id);
+
+    vi.mocked(validatePayloadSize).mockImplementation(() => {
+      throw new PayloadTooLargeError(5000, 'fcm');
+    });
+
+    await runWorkerOnce();
+
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(renderMock).not.toHaveBeenCalled();
+    const [job] = await db.select().from(jobs);
+    expect(job.status).toBe('failed');
+    expect(job.lastError).toMatch(/PayloadTooLargeError|5000/);
+  });
+
+  it('writeResults with empty results array does not throw (Drizzle empty-values guard)', async () => {
+    const { app } = await makeApp();
+    await makeDevice(app.id, { provider: 'fcm', platform: 'android', token: 'T2' });
+    const camp = await makeCampaign(app.id, { targetType: 'all' });
+    await enqueueCampaign(camp.id);
+
+    // adapter.send returns empty array — writeResults must silently skip the insert
+    sendMock.mockResolvedValue([]);
+
+    const processed = await runWorkerOnce();
+    expect(processed).toBe(true);
+
+    const dels = await db.select().from(deliveries);
+    expect(dels).toHaveLength(0);
+    const [job] = await db.select().from(jobs);
+    expect(job.status).toBe('done');
+  });
+
+  it('getAccessToken is called before render so Huawei token cache is warm', async () => {
+    const { app } = await makeApp();
+    await makeDevice(app.id, { provider: 'fcm', platform: 'android', token: 'T3' });
+    const camp = await makeCampaign(app.id, { targetType: 'all' });
+    await enqueueCampaign(camp.id);
+
+    sendMock.mockResolvedValue([
+      { token: 'T3', deviceId: null, status: 'sent', responseMeta: {} },
+    ]);
+
+    await runWorkerOnce();
+
+    // getAccessToken must be called before render (cache warm-up before adapter.render)
+    expect(getAccessTokenMock).toHaveBeenCalled();
+    const getAccessTokenCallOrder = getAccessTokenMock.mock.invocationCallOrder[0];
+    const renderCallOrder = renderMock.mock.invocationCallOrder[0];
+    expect(getAccessTokenCallOrder).toBeLessThan(renderCallOrder);
   });
 });

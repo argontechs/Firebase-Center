@@ -8,6 +8,15 @@ vi.mock('firebase-admin/app', () => ({
   getApps: vi.fn(() => []),
   deleteApp: vi.fn(),
 }));
+// Bypass the token-cache so each send() call mints fresh via mintToken (and thus via fetch),
+// which is what the per-test fetchMock setup expects.
+vi.mock('./token-cache', () => ({
+  getAccessToken: async (
+    credential: import('./types').ResolvedCredential,
+    mint: (c: import('./types').ResolvedCredential) => Promise<{ token: string; expiresAt: number }>,
+  ) => (await mint(credential)).token,
+  invalidateToken: vi.fn(),
+}));
 
 import { fcmAdapter } from './fcm-adapter';
 import { huaweiAdapter } from './huawei-adapter';

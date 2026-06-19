@@ -2,6 +2,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { huaweiAdapter } from './huawei-adapter';
 import type { NeutralMessage, ResolvedCredential, Recipient } from './types';
 
+// Bypass the token-cache so each send() call always mints fresh (mirrors the
+// original adapter contract and allows fetchMock call-count assertions to remain stable).
+vi.mock('./token-cache', () => ({
+  getAccessToken: async (
+    credential: ResolvedCredential,
+    mint: (c: ResolvedCredential) => Promise<{ token: string; expiresAt: number }>,
+  ) => (await mint(credential)).token,
+  invalidateToken: vi.fn(),
+}));
+
 function msg(over: Partial<NeutralMessage> = {}): NeutralMessage {
   return { title: 'Hi', body: 'There', data: { k: 'v' }, mode: 'notification', priority: 'high', ...over };
 }
