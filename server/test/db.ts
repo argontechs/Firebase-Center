@@ -49,6 +49,11 @@ export async function makeTestApp() {
     { default: credentialsImportPost },
     // M4.3: device import per app
     { default: appImportsPost },
+    // M4.5: ingest-key management routes
+    { default: ingestKeysPost },
+    { default: ingestKeysGet },
+    { default: ingestKeyRotatePost },
+    { default: ingestKeyRevokePost },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -72,6 +77,11 @@ export async function makeTestApp() {
     import('~~/server/api/imports/credentials.post'),
     // M4.3
     import('~~/server/api/apps/[id]/imports.post'),
+    // M4.5
+    import('~~/server/api/apps/[id]/ingest-keys/index.post'),
+    import('~~/server/api/apps/[id]/ingest-keys/index.get'),
+    import('~~/server/api/apps/[id]/ingest-keys/[kid]/rotate.post'),
+    import('~~/server/api/apps/[id]/ingest-keys/[kid]/revoke.post'),
   ]);
 
   const app = createApp();
@@ -99,6 +109,11 @@ export async function makeTestApp() {
   router.post('/api/imports/credentials', eventHandler(credentialsImportPost));
   // M4.3: device import per app
   router.post('/api/apps/:id/imports', eventHandler(appImportsPost));
+  // M4.5: ingest-key management
+  router.post('/api/apps/:id/ingest-keys', eventHandler(ingestKeysPost));
+  router.get('/api/apps/:id/ingest-keys', eventHandler(ingestKeysGet));
+  router.post('/api/apps/:id/ingest-keys/:kid/rotate', eventHandler(ingestKeyRotatePost));
+  router.post('/api/apps/:id/ingest-keys/:kid/revoke', eventHandler(ingestKeyRevokePost));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
