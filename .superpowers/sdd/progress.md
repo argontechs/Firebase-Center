@@ -10,3 +10,5 @@
 ## Tasks completed
 (none yet)
 - Task M0.1: complete (commit b4c0eac — Nuxt 4 + Nitro scaffold, vitest 2/2)
+- M0: COMPLETE (tasks M0.2–M0.10, all reviewed; e2e boot PASS, /healthz JSON 200). Hardened: reproducible Docker install (71cd2f91), /healthz at root.
+- Minor findings deferred to final review: h3 pinned redundantly in package.json; healthz.integration.test stale-env skip guard; entrypoint.sh uses npm not pnpm; drizzle meta JSON trailing-newline.
