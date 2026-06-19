@@ -1,6 +1,6 @@
 import { db } from '~~/server/db/client';
 import { campaigns, devices, jobs } from '~~/server/db/schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { JOB_TYPE_SEND, VENDOR_CHUNK_LIMIT, type SendChunkPayload } from './types';
 
 type Group = { provider: 'fcm' | 'huawei'; platform: SendChunkPayload['platform']; deviceIds: string[] };
@@ -11,13 +11,15 @@ async function resolveAudience(campaignId: string): Promise<typeof devices.$infe
 
   if (camp.targetType === 'all') {
     return db.select().from(devices)
-      .where(and(eq(devices.appId, camp.appId), eq(devices.status, 'active')));
+      .where(and(eq(devices.appId, camp.appId), eq(devices.status, 'active')))
+      .orderBy(asc(devices.provider), asc(devices.platform), asc(devices.id));
   }
   if (camp.targetType === 'tokens') {
     const ids = ((camp.targetValueJsonb as { device_ids?: string[] }).device_ids) ?? [];
     if (ids.length === 0) return [];
     return db.select().from(devices)
-      .where(and(eq(devices.appId, camp.appId), eq(devices.status, 'active'), inArray(devices.id, ids)));
+      .where(and(eq(devices.appId, camp.appId), eq(devices.status, 'active'), inArray(devices.id, ids)))
+      .orderBy(asc(devices.provider), asc(devices.platform), asc(devices.id));
   }
   // segment | topic are reserved enum values — rejected upstream at validation; defensive here.
   throw new Error(`unsupported target_type ${camp.targetType}`);

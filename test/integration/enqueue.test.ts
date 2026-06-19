@@ -58,6 +58,27 @@ describe('enqueueCampaign', () => {
     expect(rows).toHaveLength(1);
   });
 
+  it('chunkIndex is globally monotonic across mixed (provider,platform) groups', async () => {
+    const { app } = await makeApp();
+    await makeDevice(app.id, { provider: 'fcm', platform: 'android' });
+    await makeDevice(app.id, { provider: 'huawei', platform: 'huawei' });
+    const camp = await makeCampaign(app.id, { targetType: 'all' });
+
+    const res = await enqueueCampaign(camp.id);
+    expect(res.jobsCreated).toBe(2);
+
+    const rows = await db.select().from(jobs).where(eq(jobs.type, JOB_TYPE_SEND));
+    expect(rows).toHaveLength(2);
+
+    const keys = rows.map(r => r.idempotencyKey).sort();
+    expect(keys).toEqual([`${camp.id}:0`, `${camp.id}:1`]);
+
+    // Each job must carry a distinct (provider, platform) in its payload
+    const payloads = rows.map(r => r.payloadJsonb as { provider: string; platform: string });
+    const combos = new Set(payloads.map(p => `${p.provider}:${p.platform}`));
+    expect(combos.size).toBe(2);
+  });
+
   it('respects target_type=tokens (device_ids subset, only active devices)', async () => {
     const { app } = await makeApp();
     const d1 = await makeDevice(app.id, { provider: 'fcm', platform: 'android' });
