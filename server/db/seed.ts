@@ -1,8 +1,8 @@
 import { sql } from 'drizzle-orm';
 import { db } from './client';
 import { users } from './schema';
-import { hashPassword } from '~~/server/utils/auth/password';
-import { audit } from '~~/server/utils/audit';
+import { hashPassword } from '../utils/auth/password';
+import { audit } from '../utils/audit';
 
 export class SeedError extends Error {
   constructor(message: string) {
