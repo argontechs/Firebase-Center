@@ -51,6 +51,19 @@ function buildRaw(message: NeutralMessage): Record<string, unknown> {
 }
 
 // FCM Admin SDK error code -> (status, disposition)
+//
+// Code strings are prefixed with 'messaging/' by FirebaseMessagingError (constructor line 277
+// in firebase-admin/lib/messaging/error.js).  The suffix is MessagingErrorCode[key].
+//
+// Rate-limit mapping (confirmed from error.js):
+//   QUOTA_EXCEEDED        → MESSAGE_RATE_EXCEEDED → 'messaging/message-rate-exceeded'
+//   RESOURCE_EXHAUSTED    → MESSAGE_RATE_EXCEEDED → 'messaging/message-rate-exceeded'
+//   DeviceMessageRateExceeded → DEVICE_MESSAGE_RATE_EXCEEDED → 'messaging/device-message-rate-exceeded'
+//
+// Credential mismatch mapping (confirmed from error.js):
+//   SENDER_ID_MISMATCH / PERMISSION_DENIED / MismatchSenderId
+//       → MISMATCHED_CREDENTIAL → 'messaging/mismatched-credential'
+//   This is a configuration defect — retrying never self-heals → FIX_CREDENTIALS.
 function mapFcmError(code: string): { status: 'failed' | 'invalid'; disposition: Disposition } {
   switch (code) {
     case 'messaging/registration-token-not-registered':
@@ -59,10 +72,15 @@ function mapFcmError(code: string): { status: 'failed' | 'invalid'; disposition:
     case 'messaging/payload-size-limit-exceeded':
       return { status: 'failed', disposition: 'FIX_REQUEST' };
     case 'messaging/third-party-auth-error':
+    // SENDER_ID_MISMATCH / PERMISSION_DENIED map here; wrong sender never self-heals.
+    case 'messaging/mismatched-credential':
       return { status: 'failed', disposition: 'FIX_CREDENTIALS' };
     case 'messaging/internal-error':
     case 'messaging/server-unavailable':
-    case 'messaging/quota-exceeded':
+    // Real rate-limit codes from the Admin SDK (QUOTA_EXCEEDED/RESOURCE_EXHAUSTED both map
+    // to MESSAGE_RATE_EXCEEDED; DeviceMessageRateExceeded maps to DEVICE_MESSAGE_RATE_EXCEEDED).
+    case 'messaging/message-rate-exceeded':
+    case 'messaging/device-message-rate-exceeded':
       return { status: 'failed', disposition: 'RETRY_BACKOFF' };
     default:
       return { status: 'failed', disposition: 'RETRY_BACKOFF' };
@@ -120,6 +138,13 @@ export const fcmAdapter: PushProvider = {
     message: WireMessage,
     recipients: Recipient[],
   ): Promise<DeliveryResult[]> {
+    // Architectural note: send() uses getMessaging(appFor(credential)) which delegates
+    // credential refresh to the Firebase Admin SDK's internal reactive mechanism (re-mint
+    // on 401).  It does NOT consume the token-cache in server/utils/push/token-cache.ts,
+    // whose proactive <5-min refresh guarantee only applies to callers that thread
+    // getAccessToken(credential, fcmAdapter.mintToken) explicitly.  For FCM sends this
+    // split is tolerable because the SDK is authoritative, but callers that need the
+    // proactive-refresh SLA must wrap send() with an external token-cache round-trip.
     const messaging = getMessaging(appFor(credential));
     const base = message.raw as Record<string, unknown>;
     const groups = chunk(recipients, CHUNK);
