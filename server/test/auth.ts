@@ -18,21 +18,115 @@ export async function seedUser(overrides: Partial<{
   return { ...u, plaintextPassword: password };
 }
 
+type NodeListener = (req: any, res: any) => void;
+type FetchInit = { method?: string; body?: unknown; headers?: Record<string, string> };
+
 /**
  * Drives a black-box HTTP request against a `makeTestApp()` listener.
+ *
+ * Curried form — `authedFetch(app, user)` — returns a function that issues
+ * authenticated requests and resolves to parsed JSON (or undefined for 204).
+ * Throws an error with `.statusCode` for 4xx/5xx responses.
  *
  * Flow:
  *  1. POST /api/auth/login with `user`'s credentials → capture `bo_session` cookie.
  *  2. GET  /api/auth/csrf with the session cookie → capture `bo_csrf` cookie + token.
  *  3. Issue `path` with `method`/`body`/`headers` plus both cookies and the CSRF header.
- *
- * Returns a standard `Response`-like object (supertest response cast to Response).
  */
+export function authedFetch(
+  nodeListener: NodeListener,
+  user: { email: string; plaintextPassword: string },
+): (path: string, init?: FetchInit) => Promise<any>;
+
 export async function authedFetch(
-  nodeListener: (req: any, res: any) => void,
+  nodeListener: NodeListener,
   user: { email: string; plaintextPassword: string },
   path: string,
-  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+  init?: FetchInit,
+): Promise<Response>;
+
+export function authedFetch(
+  nodeListener: NodeListener,
+  user: { email: string; plaintextPassword: string },
+  path?: string,
+  init?: FetchInit,
+): any {
+  if (path === undefined) {
+    // Curried form: return a bound fetch function that resolves to parsed JSON.
+    return async (p: string, i: FetchInit = {}) => _authedRequest(nodeListener, user, p, i);
+  }
+  // Legacy 4-arg form: returns a fetch-compatible Response.
+  return _authedRequestLegacy(nodeListener, user, path, init ?? {});
+}
+
+async function _authedRequest(
+  nodeListener: NodeListener,
+  user: { email: string; plaintextPassword: string },
+  path: string,
+  init: FetchInit = {},
+): Promise<any> {
+  const { default: request } = await import('supertest');
+
+  // 1. Login → session cookie
+  const loginRes = await request(nodeListener)
+    .post('/api/auth/login')
+    .send({ email: user.email, password: user.plaintextPassword })
+    .set('Content-Type', 'application/json');
+
+  if (loginRes.status !== 200) {
+    throw new Error(`authedFetch: login failed with status ${loginRes.status} — check credentials or user status`);
+  }
+
+  const sessionCookie = extractCookie(loginRes.headers['set-cookie'], 'bo_session');
+
+  // 2. Fetch CSRF token
+  const csrfRes = await request(nodeListener)
+    .get('/api/auth/csrf')
+    .set('Cookie', sessionCookie ? `bo_session=${sessionCookie}` : '');
+
+  const csrfCookie = extractCookie(csrfRes.headers['set-cookie'], 'bo_csrf');
+  const csrfToken: string = (csrfRes.body as { token: string }).token ?? '';
+
+  const cookieHeader = [
+    sessionCookie ? `bo_session=${sessionCookie}` : '',
+    csrfCookie ? `bo_csrf=${csrfCookie}` : '',
+  ].filter(Boolean).join('; ');
+
+  // 3. Issue the actual request
+  const method = (init.method ?? 'GET').toLowerCase() as 'get' | 'post' | 'put' | 'patch' | 'delete';
+  let req = request(nodeListener)[method](path)
+    .set('Cookie', cookieHeader)
+    .set('x-csrf-token', csrfToken)
+    .set('Origin', 'http://localhost:3000');
+
+  for (const [k, v] of Object.entries(init.headers ?? {})) {
+    req = req.set(k, v);
+  }
+  if (init.body !== undefined) {
+    req = req.send(init.body as object).set('Content-Type', 'application/json');
+  }
+
+  const res = await req;
+
+  if (res.status >= 400) {
+    const err = Object.assign(new Error(res.body?.statusMessage ?? String(res.status)), {
+      statusCode: res.status,
+      data: res.body,
+    });
+    throw err;
+  }
+
+  // 204 No Content → return undefined
+  if (res.status === 204) return undefined;
+
+  return res.body;
+}
+
+async function _authedRequestLegacy(
+  nodeListener: NodeListener,
+  user: { email: string; plaintextPassword: string },
+  path: string,
+  init: FetchInit = {},
 ): Promise<Response> {
   const { default: request } = await import('supertest');
 
