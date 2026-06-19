@@ -5,6 +5,8 @@ import { jobs, deliveries } from '~~/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { enqueueCampaign } from '~~/server/utils/queue/enqueue';
 
+const invalidateTokenMock = vi.fn();
+
 // Mock the credential resolver and provider registry so no real provider HTTP happens.
 const sendMock = vi.fn();
 vi.mock('~~/server/utils/credentials/resolve', () => ({
@@ -23,7 +25,7 @@ vi.mock('~~/server/utils/push/registry', () => ({
 }));
 vi.mock('~~/server/utils/push/token-cache', () => ({
   getAccessToken: vi.fn().mockResolvedValue('access-token'),
-  invalidateToken: vi.fn(),
+  invalidateToken: invalidateTokenMock,
 }));
 vi.mock('~~/server/utils/payload', async (importOriginal) => {
   const actual = await importOriginal<typeof import('~~/server/utils/payload')>();
@@ -35,6 +37,7 @@ const { runWorkerOnce } = await import('~~/server/utils/queue/worker');
 beforeEach(async () => {
   await truncateAll();
   sendMock.mockReset();
+  invalidateTokenMock.mockReset();
 });
 
 describe('worker retry / dead-letter logic', () => {
@@ -119,5 +122,50 @@ describe('worker retry / dead-letter logic', () => {
     const [job] = await db.select().from(jobs);
     expect(job.status).toBe('pending');
     expect((job.payloadJsonb as { deviceIds: string[] }).deviceIds).toEqual([dRetry.id]);
+  });
+
+  it('REAUTH disposition calls invalidateToken() to evict the stale cached token', async () => {
+    const { app } = await makeApp();
+    const d = await makeDevice(app.id, { provider: 'fcm', platform: 'android', token: 'T' });
+    const camp = await makeCampaign(app.id, { targetType: 'all' });
+    await enqueueCampaign(camp.id);
+
+    sendMock.mockResolvedValue([
+      { token: 'T', deviceId: d.id, status: 'failed', disposition: 'REAUTH', errorCode: '80200001' },
+    ]);
+
+    await runWorkerOnce();
+    // Job should be terminally failed.
+    const [job] = await db.select().from(jobs);
+    expect(job.status).toBe('failed');
+    expect(job.lastError).toContain('REAUTH');
+    // invalidateToken must have been called with the credential id so subsequent jobs re-mint.
+    expect(invalidateTokenMock).toHaveBeenCalledWith('c'); // 'c' is the mocked credential id
+  });
+
+  it('mixed terminal+retryable: retryable tokens get gave_up rows when terminal wins', async () => {
+    const { app } = await makeApp();
+    const dTerminal = await makeDevice(app.id, { provider: 'fcm', platform: 'android', token: 'T_TERMINAL' });
+    const dRetry = await makeDevice(app.id, { provider: 'fcm', platform: 'android', token: 'T_RETRY' });
+    const camp = await makeCampaign(app.id, { targetType: 'all' });
+    await enqueueCampaign(camp.id);
+
+    sendMock.mockResolvedValue([
+      { token: 'T_TERMINAL', deviceId: dTerminal.id, status: 'failed', disposition: 'FIX_CREDENTIALS', errorCode: 'AUTH_ERROR' },
+      { token: 'T_RETRY', deviceId: dRetry.id, status: 'failed', disposition: 'RETRY_BACKOFF', errorCode: '503' },
+    ]);
+
+    await runWorkerOnce();
+    const [job] = await db.select().from(jobs);
+    expect(job.status).toBe('failed');
+    // The FIX_CREDENTIALS token should have a failed delivery row (written by writeResults).
+    const terminalDel = await db.select().from(deliveries).where(eq(deliveries.token, 'T_TERMINAL'));
+    expect(terminalDel).toHaveLength(1);
+    expect(terminalDel[0].status).toBe('failed');
+    expect(terminalDel[0].disposition).toBe('FIX_CREDENTIALS');
+    // The RETRY_BACKOFF token must also have a record — gave_up — since the job is now dead.
+    const retryDel = await db.select().from(deliveries).where(eq(deliveries.token, 'T_RETRY'));
+    expect(retryDel).toHaveLength(1);
+    expect(retryDel[0].status).toBe('gave_up');
   });
 });

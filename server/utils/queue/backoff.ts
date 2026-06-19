@@ -13,7 +13,8 @@ const CEILING_MS = 60 * 60 * 1000; // 1h hard cap
  */
 export function nextRunAfter(attempts: number, retryAfterMs?: number): Date {
   const exp = Math.min(BASE_MS * 2 ** Math.max(0, attempts - 1), CEILING_MS);
-  const jitter = Math.floor(Math.random() * Math.min(exp, BASE_MS)); // bounded full jitter
+  // True full jitter: random in [0, exp] so the jitter range grows with the backoff ceiling.
+  const jitter = Math.floor(Math.random() * exp);
   const backoff = Math.min(exp + jitter, CEILING_MS);
   const delay = Math.min(Math.max(backoff, retryAfterMs ?? 0), CEILING_MS);
   return new Date(Date.now() + delay);

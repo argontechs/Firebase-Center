@@ -3,7 +3,7 @@ import { jobs, campaigns, devices, deliveries } from '~~/server/db/schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { resolveCredential } from '~~/server/utils/credentials/resolve';
 import { getAdapter } from '~~/server/utils/push/registry';
-import { getAccessToken } from '~~/server/utils/push/token-cache';
+import { getAccessToken, invalidateToken } from '~~/server/utils/push/token-cache';
 import { validatePayloadSize, PayloadTooLargeError } from '~~/server/utils/payload';
 import type { NeutralMessage, Recipient, DeliveryResult, Disposition } from '~~/server/utils/push/types';
 import { type SendChunkPayload } from './types';
@@ -132,7 +132,13 @@ function classify(results: DeliveryResult[]) {
   return { retryable, terminal };
 }
 
-async function processSendChunk(job: typeof jobs.$inferSelect): Promise<DeliveryResult[]> {
+interface ChunkOutcome {
+  results: DeliveryResult[];
+  /** Credential id used for this send — needed to invalidate the token cache on REAUTH. */
+  credentialId: string | null;
+}
+
+async function processSendChunk(job: typeof jobs.$inferSelect): Promise<ChunkOutcome> {
   const payload = job.payloadJsonb as SendChunkPayload;
   const [camp] = await db
     .select()
@@ -149,12 +155,12 @@ async function processSendChunk(job: typeof jobs.$inferSelect): Promise<Delivery
         inArray(devices.id, payload.deviceIds),
       ),
     );
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return { results: [], credentialId: null };
 
   const resolved = await resolveCredential(camp.appId, payload.provider, payload.platform);
   if (!resolved.ready) {
     await recordCredentialNotReady(payload.campaignId, rows);
-    return [];
+    return { results: [], credentialId: null };
   }
 
   const adapter = getAdapter(payload.provider);
@@ -169,7 +175,7 @@ async function processSendChunk(job: typeof jobs.$inferSelect): Promise<Delivery
   }));
   const results: DeliveryResult[] = await adapter.send(resolved.credential, wire, recipients);
   await writeResults(payload.campaignId, rows, results);
-  return results;
+  return { results, credentialId: resolved.credential.id };
 }
 
 export async function runWorkerOnce(): Promise<boolean> {
@@ -177,12 +183,37 @@ export async function runWorkerOnce(): Promise<boolean> {
   if (!job) return false;
   const payload = job.payloadJsonb as SendChunkPayload;
   try {
-    const results = await processSendChunk(job);
+    const { results, credentialId } = await processSendChunk(job);
     const { retryable, terminal } = classify(results);
 
     // Non-transient disposition: fail the job terminally, never retry.
     // (sent/invalid/DELETE_TOKEN rows already persisted by writeResults.)
     if (terminal.length > 0) {
+      // REAUTH means the OAuth token cached for this credential is stale. Evict it from the
+      // in-memory cache so the next job for the same credential re-mints immediately rather
+      // than waiting up to ~1h for the TTL to expire naturally.
+      const hasReauth = terminal.some((r) => r.disposition === 'REAUTH');
+      if (hasReauth && credentialId) {
+        invalidateToken(credentialId);
+      }
+      // Dead-letter any retryable tokens that were in the same batch: when terminal wins the
+      // job will never be retried, so these tokens need a gave_up row or they have no record.
+      if (retryable.length > 0) {
+        await db.insert(deliveries).values(
+          retryable.map((r) => ({
+            campaignId: payload.campaignId,
+            deviceId: r.deviceId ?? null,
+            provider: payload.provider as typeof deliveries.$inferInsert['provider'],
+            platform: payload.platform as typeof deliveries.$inferInsert['platform'],
+            token: r.token,
+            status: 'gave_up' as const,
+            disposition: r.disposition ?? 'RETRY_BACKOFF',
+            errorCode: r.errorCode ?? null,
+            responseMeta: r.responseMeta ?? null,
+            sentAt: null,
+          })),
+        );
+      }
       await db
         .update(jobs)
         .set({
