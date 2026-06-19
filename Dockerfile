@@ -16,8 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends postgresql-clie
 RUN npm install -g pnpm@10.33.0
 # bring the built server, prod deps, and the migrate/seed tooling (tsx, drizzle-kit)
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
-RUN pnpm add tsx drizzle-kit
+RUN pnpm install --frozen-lockfile
 COPY --from=build /app/.output ./.output
 COPY server ./server
 COPY drizzle.config.ts ./drizzle.config.ts

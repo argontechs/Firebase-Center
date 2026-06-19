@@ -22,8 +22,15 @@ until [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/healthz)
 done
 
 echo "[e2e] /healthz body:"
-curl -s http://localhost:3000/healthz
+HEALTH_BODY="$(curl -s http://localhost:3000/healthz)"
+echo "$HEALTH_BODY"
 echo
+if ! echo "$HEALTH_BODY" | grep -q '"status"'; then
+  echo "[e2e] FAILED: /healthz response does not contain \"status\" field"
+  docker compose logs app
+  docker compose down -v
+  exit 1
+fi
 echo "[e2e] confirming migrations ran (users table exists on the fresh volume)"
 docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c '\dt users' | grep -q users
 

@@ -23,6 +23,17 @@ describe('Dockerfile', () => {
     expect(df).toMatch(/pnpm run build/);
   });
 
+  it('runtime stage installs all deps from the frozen lockfile (no pnpm add)', () => {
+    // Split on stage boundaries so we inspect only the runtime stage
+    const stages = df.split(/^FROM\s/m);
+    const runtimeStage = stages.find((s) => s.startsWith('node:') && s.includes('AS runtime'));
+    expect(runtimeStage).toBeDefined();
+    // Must use frozen-lockfile install (covers devDeps like tsx, drizzle-kit)
+    expect(runtimeStage).toMatch(/pnpm install --frozen-lockfile/);
+    // Must NOT use pnpm add (which would pull un-pinned versions and mutate the lockfile)
+    expect(runtimeStage).not.toMatch(/pnpm add/);
+  });
+
   it('uses the entrypoint script', () => {
     expect(df).toMatch(/entrypoint\.sh/);
   });
