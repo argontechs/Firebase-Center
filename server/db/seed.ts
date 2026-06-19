@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { db } from './client';
 import { users } from './schema';
 import { hashPassword } from '~/server/utils/auth/password';
+import { audit } from '~/server/utils/audit';
 
 export class SeedError extends Error {
   constructor(message: string) {
@@ -19,14 +20,26 @@ export function validatePasswordStrength(pw: string): { ok: true } | { ok: false
   return { ok: true };
 }
 
+/** Resolve env vars, supporting both bare keys (tests/direct callers) and
+ *  the NUXT_-prefixed keys that Docker / Nuxt runtimeConfig injects. */
+function resolveEnv(
+  env: { BO_ADMIN_EMAIL?: string; BO_ADMIN_PASSWORD?: string } = {
+    BO_ADMIN_EMAIL: process.env.NUXT_BO_ADMIN_EMAIL ?? process.env.BO_ADMIN_EMAIL,
+    BO_ADMIN_PASSWORD: process.env.NUXT_BO_ADMIN_PASSWORD ?? process.env.BO_ADMIN_PASSWORD,
+  },
+) {
+  return env;
+}
+
 export async function seedFirstAdmin(
-  env: { BO_ADMIN_EMAIL?: string; BO_ADMIN_PASSWORD?: string } = process.env,
+  env?: { BO_ADMIN_EMAIL?: string; BO_ADMIN_PASSWORD?: string },
 ): Promise<{ seeded: boolean }> {
+  const resolved = resolveEnv(env);
   const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
   if (count > 0) return { seeded: false };
 
-  const email = env.BO_ADMIN_EMAIL;
-  const password = env.BO_ADMIN_PASSWORD;
+  const email = resolved.BO_ADMIN_EMAIL;
+  const password = resolved.BO_ADMIN_PASSWORD;
   if (!email || !password) {
     throw new SeedError(
       'users table is empty and BO_ADMIN_EMAIL / BO_ADMIN_PASSWORD are not set — refusing to boot unloginnable',
@@ -36,13 +49,14 @@ export async function seedFirstAdmin(
   if (!strength.ok) {
     throw new SeedError(`BO_ADMIN_PASSWORD ${strength.reason}`);
   }
-  await db.insert(users).values({
+  const [inserted] = await db.insert(users).values({
     email: email.toLowerCase(),
     passwordHash: await hashPassword(password),
     role: 'admin',
     status: 'active',
     mustChangePassword: true,
-  });
+  }).returning({ id: users.id });
+  await audit({ userId: inserted.id, action: 'user_create', targetType: 'user', targetId: inserted.id });
   return { seeded: true };
 }
 
