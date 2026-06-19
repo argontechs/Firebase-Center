@@ -45,6 +45,8 @@ export async function makeTestApp() {
     { default: appGet },
     { default: appPatch },
     { default: appDelete },
+    // M3.9: credential import
+    { default: credentialsImportPost },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -64,6 +66,8 @@ export async function makeTestApp() {
     import('~~/server/api/apps/[id].get'),
     import('~~/server/api/apps/[id].patch'),
     import('~~/server/api/apps/[id].delete'),
+    // M3.9
+    import('~~/server/api/imports/credentials.post'),
   ]);
 
   const app = createApp();
@@ -87,6 +91,8 @@ export async function makeTestApp() {
   router.get('/api/apps/:id', eventHandler(appGet));
   router.patch('/api/apps/:id', eventHandler(appPatch));
   router.delete('/api/apps/:id', eventHandler(appDelete));
+  // M3.9: credential import
+  router.post('/api/imports/credentials', eventHandler(credentialsImportPost));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
