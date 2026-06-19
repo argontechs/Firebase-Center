@@ -12,3 +12,9 @@
 - Task M0.1: complete (commit b4c0eac — Nuxt 4 + Nitro scaffold, vitest 2/2)
 - M0: COMPLETE (tasks M0.2–M0.10, all reviewed; e2e boot PASS, /healthz JSON 200). Hardened: reproducible Docker install (71cd2f91), /healthz at root.
 - Minor findings deferred to final review: h3 pinned redundantly in package.json; healthz.integration.test stale-env skip guard; entrypoint.sh uses npm not pnpm; drizzle meta JSON trailing-newline.
+
+## SCOPE CHANGE 2026-06-19 (reversal)
+- user management is RESTORED (user changed their mind: "we have to create other user accounts to login to the system").
+- Build plan Task **M1.12** (create / disable / role-change `server/api/users/*` + admin UI) AND keep roles (admin/operator). Do this right after the running M1.1–M1.11 (login core) workflow completes.
+- M1.14 integration tests KEEP their user_create assertions (no longer cut).
+- Net: M1 = full plan (M1.1–M1.12, M1.14). Single-admin cut from earlier is VOID.
