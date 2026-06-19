@@ -15,7 +15,7 @@ describe('GET /api/labels', () => {
   it('returns the label config without requiring auth', async () => {
     const res = await labelsGet({} as any);
     expect(res).toEqual({
-      company: { singular: 'Company', plural: 'Companies' },
+      company: { singular: 'Site', plural: 'Sites' },
       app: { singular: 'App', plural: 'Apps' },
     });
   });

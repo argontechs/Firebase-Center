@@ -3,8 +3,8 @@ import { LABELS, COMPANY_LABEL, COMPANY_LABEL_PLURAL } from './label';
 
 describe('label constant', () => {
   it('exposes a single configurable company label (singular + plural)', () => {
-    expect(LABELS.company.singular).toBe('Company');
-    expect(LABELS.company.plural).toBe('Companies');
+    expect(LABELS.company.singular).toBe('Site');
+    expect(LABELS.company.plural).toBe('Sites');
     expect(LABELS.app.singular).toBe('App');
     expect(LABELS.app.plural).toBe('Apps');
   });

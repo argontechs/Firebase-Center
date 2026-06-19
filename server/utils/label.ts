@@ -2,7 +2,7 @@
 // Renaming "Company" -> "Client" / "Site" / "Brand" later is cosmetic:
 // change the two strings below and nothing else (no data migration — design §4).
 export const LABELS = {
-  company: { singular: 'Company', plural: 'Companies' },
+  company: { singular: 'Site', plural: 'Sites' },
   app: { singular: 'App', plural: 'Apps' },
 } as const;
 
