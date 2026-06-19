@@ -150,3 +150,12 @@ export const auditLog = pgTable('audit_log', {
   metaJsonb: jsonb('meta_jsonb'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---- M1-only extension (NOT in the Shared Contracts Registry) ----
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey(),                  // 256-bit random, base64url
+  userId: uuid('user_id').notNull().references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  absoluteExpiry: timestamp('absolute_expiry', { withTimezone: true }).notNull(),
+});
