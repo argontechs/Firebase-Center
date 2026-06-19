@@ -51,18 +51,21 @@ It centralizes credential management, a stored audience of device tokens (import
 Firebase Center (operated by the team)
 │
 ├── Company  "Acme Corp"            ← top-level tenant (label is configurable; rename-safe)
-│     ├── App  "Acme Shopper"       ← one App = one credential profile
-│     │     ├── Credentials: FCM service-account JSON  +/or  Huawei App ID/Secret
-│     │     └── Devices (imported / registered tokens)  ← the audience
+│     ├── App  "Acme Shopper"       ← one App = one logical product
+│     │     ├── Credential: FCM (iOS)      — service-account JSON for the iOS Firebase project
+│     │     ├── Credential: FCM (Android)  — service-account JSON for the Android Firebase project
+│     │     ├── Credential: Huawei         — App ID / App Secret
+│     │     └── Devices (imported / registered tokens)  ← audience; each device carries provider + platform
 │     └── App  "Acme Rider"
-│           ├── Credentials
+│           ├── Credentials (per platform/provider)
 │           └── Devices
 ├── Company  "Globex"
 │     └── App  "Globex Main" → Credentials → Devices
 └── … many more companies
 ```
 
-- **Company** → many **Apps**. Each **App** = one credential profile + its own devices.
+- **Company** → many **Apps**. Each **App** = a logical product holding **a set of provider credentials (one per platform/project)** + its own device audience.
+- **iOS and Android are separate Firebase projects** (two service-account files), so an App holds **multiple FCM credentials** distinguished by platform. A device's `(provider, platform)` selects which credential sends to it: iOS token → iOS service account, Android token → Android service account, Huawei token → Huawei credential.
 - "Company" is the v1 label; it lives in a single i18n/label constant so it can be renamed to *Client / Site / Brand* later **without** a data migration (cosmetic only).
 - A **Campaign** = one composed message + a target (all / segment / specific tokens) within an App.
 - A **Delivery** = the per-device result of a campaign.
@@ -102,11 +105,11 @@ Firebase Center (operated by the team)
 users        ( id, email, password_hash, role[admin|operator], created_at )
 companies    ( id, name, status, notes, created_at )
 apps         ( id, company_id→companies, name, notes, created_at )
-app_credentials ( id, app_id→apps, provider[fcm|huawei],
+app_credentials ( id, app_id→apps, provider[fcm|huawei], platform[ios|android|huawei|web|any], label,
                   secret_ciphertext, secret_nonce, secret_tag, key_version,
                   meta_jsonb,            -- non-secret: project_id / app_id / huawei_project_id / readiness flags
                   configured_at, rotated_at,
-                  UNIQUE(app_id, provider) )
+                  UNIQUE(app_id, provider, platform) )   -- (fcm,ios)+(fcm,android) = two separate Firebase projects
 devices      ( id, app_id→apps, provider[fcm|huawei], platform[android|ios|huawei|web],
                token, external_user_id, attributes_jsonb, status[active|invalid|unsubscribed],
                created_at, last_seen_at,
@@ -124,8 +127,9 @@ jobs         ( id, type, payload_jsonb, status[pending|running|done|failed],
 audit_log    ( id, user_id→users, action, target_type, target_id, meta_jsonb, created_at )
 ```
 
-- Per-device `attributes_jsonb` (e.g. `{country, app_version, language}`) powers segmentation via Postgres JSONB indexes.
+- Per-device `attributes_jsonb` (e.g. `{country, app_version, language}`) is stored for future segmentation via Postgres JSONB indexes (not surfaced in the v1 UI — see §15).
 - Secrets stored as `ciphertext + nonce + tag + key_version` (AES-256-GCM); `meta_jsonb` holds only non-secret display data.
+- A device's `(provider, platform)` resolves which `app_credentials` row sends to it — e.g. an iOS FCM device uses the iOS Firebase service account, an Android FCM device uses the Android one. The token cache is keyed per credential.
 
 ## 7. Provider Adapter Layer
 
@@ -142,6 +146,7 @@ interface PushProvider {
 - **`FcmAdapter`** — HTTP v1 (`/v1/projects/{project_id}/messages:send`); JWT-from-service-account OAuth2; `sendEach*` fanout (≤ 500, 1 req/token); `data` as flat map.
 - **`HuaweiAdapter`** — `client_credentials` OAuth2; v1 (`/v1/{app_id}/...`) **and** v2 (`/v2/{projectId}/...`); native multi-token (≤ 1000); `data` as JSON **string**; must read body `code` (HTTP 200 even on failure).
 - **Error normalization** → common dispositions: `DELETE_TOKEN`, `RETRY_BACKOFF`, `FIX_REQUEST`, `REAUTH`, `FIX_CREDENTIALS` (full mapping in reference §5/§8).
+- **Credential resolution** → the pipeline groups recipients by `(provider, platform)` and selects the matching `app_credentials` row (FCM-iOS vs FCM-Android vs Huawei); each credential has its own cached access token.
 
 ## 8. Credential Vault & Security
 
@@ -164,9 +169,9 @@ Apps may **also** register tokens going forward via a small authenticated API en
 
 ## 10. Send Pipeline
 
-1. **Compose** — pick App → title/body/`data` → choose **mode** (`notification` vs `data`-only) → choose **target** (all devices / segment by attribute / specific tokens) → **preview recipient count**.
+1. **Compose** — pick App → title/body/`data` → choose **mode** (`notification` vs `data`-only) → choose **target** (v1: **all devices** or **specific tokens**; attribute-segments are a fast-follow, see §15) → **preview recipient count**.
 2. **Enqueue** — create `campaign` + `jobs` rows (idempotency key = campaign-id + token chunk).
-3. **Worker** — picks jobs, resolves the audience, **splits by provider** (FCM vs Huawei), **chunks to vendor limits**, calls each adapter.
+3. **Worker** — picks jobs, resolves the audience, **splits by `(provider, platform)`** to select the matching credential (FCM-iOS / FCM-Android / Huawei), **chunks to vendor limits**, calls each adapter.
 4. **Record** — write `deliveries`; on `DELETE_TOKEN` dispositions mark devices `invalid` (event-driven cleanup); on `RETRY_BACKOFF` requeue with backoff.
 5. **History** — campaign view shows sent/failed/invalid counts and per-token results.
 
@@ -200,15 +205,15 @@ At v1 scale the worker runs in-process; it reads from the `jobs` table so it can
 
 ## 14. Scope — v1 vs Later
 
-**v1 (this build):** companies, apps, FCM + Huawei credentials (encrypted vault), CSV/JSON import + token-registration endpoint, compose + send (all/segment/tokens, notification/data mode), delivery results, event-driven invalid-token cleanup, team auth + audit log, Docker + cross-OS.
+**v1 (this build):** companies, apps, **per-platform** FCM + Huawei credentials (encrypted vault), CSV/JSON import with column-mapping + token-registration endpoint, compose + send (**all-devices** or **specific-tokens**, notification/data mode), delivery results, event-driven invalid-token cleanup, team auth + audit log, Docker + cross-OS.
 
-**Later (not now):** per-company self-service logins (SaaS), scheduled/recurring sends, A/B testing, analytics dashboards, Redis/queue at high scale, topic-management UI, templates, APNs-direct / web-push-direct / extra channels, KMS-backed envelope encryption.
+**Later (not now):** **attribute-based audience segments**, per-company self-service logins (SaaS), scheduled/recurring sends, A/B testing, analytics dashboards, Redis/queue at high scale, topic-management UI, templates, APNs-direct / web-push-direct / extra channels, KMS-backed envelope encryption.
 
-## 15. Open Questions / To Confirm
+## 15. Resolved Decisions (review, 2026-06-19)
 
-1. **Import format** — CSV is assumed primary; confirm your existing export is CSV (and roughly which columns) so the import mapper defaults are right.
-2. **Separate iOS/Android Firebase projects?** — if iOS and Android are *separate* Firebase projects (two service-account files), they become two Apps (or one App holding two FCM credentials). Default assumption: one Firebase project per app covers both platforms.
-3. **Segmentation depth for v1** — is "all devices" + "specific tokens" enough to start, with attribute-segments as a fast follow, or are attribute-segments needed in v1?
+1. **Separate iOS/Android Firebase projects.** The owner keeps **two Firebase projects** — one iOS, one Android — so each App holds **multiple FCM service-account credentials** (plus optional Huawei), modeled as `app_credentials` rows keyed by `(provider, platform)`. A device's `(provider, platform)` routes it to the correct credential.
+2. **Import format — flexible.** Exact source format is not yet fixed, so the importer supports **both CSV and JSON** with an explicit **column-mapping** step; defaults finalized once a real export sample is available.
+3. **v1 targeting — all-devices + specific-tokens only.** Attribute-based segments are deferred (fast-follow). `attributes_jsonb` is still stored now so segments can be added later with no migration.
 
 ## 16. References
 
