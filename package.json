@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "argon2": "^0.44.0",
+    "csv-parse": "^7.0.0",
     "drizzle-orm": "0.36.4",
     "h3": "^1.15.11",
     "nuxt": "3.14.1592",
