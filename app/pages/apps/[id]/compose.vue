@@ -6,6 +6,7 @@ defineOptions({ name: 'ComposePage' });
 const route = useRoute();
 const router = useRouter();
 const appId = computed(() => String(route.params.id));
+const csrf = useCsrf();
 
 const title = ref('');
 const body = ref('');
@@ -21,6 +22,7 @@ const totalBytes = ref(0);
 const withinLimit = ref(true);
 const previewed = ref(false);
 const sending = ref(false);
+const error = ref<string | null>(null);
 
 function parsedData(): Record<string, string> {
   try { return JSON.parse(dataText.value || '{}'); } catch { return {}; }
@@ -32,21 +34,28 @@ function targetValue() {
 }
 
 async function preview() {
-  const res = await $fetch<{ byGroup: GroupPreview[]; totalBytes: number; withinLimit: boolean }>(
-    '/api/campaigns/preview',
-    {
-      method: 'POST',
-      body: {
-        appId: appId.value, mode: mode.value, priority: priority.value,
-        targetType: targetType.value, targetValue: targetValue(), providerScope: 'both',
-        title: title.value, body: body.value, data: parsedData(),
+  error.value = null;
+  try {
+    await csrf.fetchToken();
+    const res = await $fetch<{ byGroup: GroupPreview[]; totalBytes: number; withinLimit: boolean }>(
+      '/api/campaigns/preview',
+      {
+        method: 'POST',
+        headers: csrf.headers(),
+        body: {
+          appId: appId.value, mode: mode.value, priority: priority.value,
+          targetType: targetType.value, targetValue: targetValue(), providerScope: 'both',
+          title: title.value, body: body.value, data: parsedData(),
+        },
       },
-    },
-  );
-  byGroup.value = res.byGroup;
-  totalBytes.value = res.totalBytes;
-  withinLimit.value = res.withinLimit;
-  previewed.value = true;
+    );
+    byGroup.value = res.byGroup;
+    totalBytes.value = res.totalBytes;
+    withinLimit.value = res.withinLimit;
+    previewed.value = true;
+  } catch (e: any) {
+    error.value = e?.data?.message ?? e?.message ?? 'Preview failed. Please try again.';
+  }
 }
 
 const canSend = computed(() => previewed.value && withinLimit.value && !sending.value);
@@ -54,9 +63,12 @@ const canSend = computed(() => previewed.value && withinLimit.value && !sending.
 async function send() {
   if (!canSend.value) return;
   sending.value = true;
+  error.value = null;
   try {
+    await csrf.fetchToken();
     const res = await $fetch<{ campaignId: string }>('/api/campaigns', {
       method: 'POST',
+      headers: csrf.headers(),
       body: {
         appId: appId.value, title: title.value, body: body.value, data: parsedData(),
         mode: mode.value, priority: priority.value,
@@ -64,6 +76,8 @@ async function send() {
       },
     });
     await router.push(`/apps/${appId.value}/history?campaign=${res.campaignId}`);
+  } catch (e: any) {
+    error.value = e?.data?.message ?? e?.message ?? 'Send failed. Please try again.';
   } finally {
     sending.value = false;
   }
@@ -119,5 +133,7 @@ async function send() {
     </div>
 
     <button data-test="send-btn" :disabled="!canSend" @click="send">Send</button>
+
+    <p v-if="error" data-test="error-msg" class="error">{{ error }}</p>
   </section>
 </template>

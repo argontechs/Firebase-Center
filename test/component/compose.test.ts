@@ -19,16 +19,22 @@ const previewTooLarge = {
   withinLimit: false,
 };
 
+let mockFetchToken: ReturnType<typeof vi.fn>;
+let mockHeaders: ReturnType<typeof vi.fn>;
+
 beforeEach(() => {
+  mockFetchToken = vi.fn(async () => {});
+  mockHeaders = vi.fn(() => ({ 'x-csrf-token': FAKE_CSRF }));
+
   vi.stubGlobal('useRoute', () => ({ params: { id: 'app-1' } }));
   vi.stubGlobal('useRouter', () => ({ push: vi.fn() }));
   vi.stubGlobal('useCsrf', () => ({
     token: { value: FAKE_CSRF },
-    fetchToken: vi.fn(async () => {}),
-    headers: vi.fn(() => ({ 'x-csrf-token': FAKE_CSRF })),
+    fetchToken: mockFetchToken,
+    headers: mockHeaders,
   }));
-  // Default $fetch: preview returns ok
-  vi.stubGlobal('$fetch', vi.fn(async (url: string) => {
+  // Default $fetch: preview returns ok; POST /api/campaigns returns campaignId
+  vi.stubGlobal('$fetch', vi.fn(async (url: string, opts?: { method?: string; headers?: Record<string, string> }) => {
     if (url === '/api/campaigns/preview') return previewOk;
     if (url === '/api/campaigns') return { campaignId: 'camp-1' };
     return {};
@@ -63,5 +69,26 @@ describe('compose.vue', () => {
     await wrapper.find('[data-test="preview-btn"]').trigger('click');
     await flushPromises();
     expect(wrapper.find('[data-test="send-btn"]').attributes('disabled')).toBeDefined();
+  });
+
+  it('calls csrf.fetchToken() and csrf.headers() on preview POST', async () => {
+    const wrapper = await mountSuspended(Compose);
+    await wrapper.find('[data-test="preview-btn"]').trigger('click');
+    await flushPromises();
+    // CSRF must be fetched and sent on every state-changing request
+    expect(mockFetchToken).toHaveBeenCalled();
+    expect(mockHeaders).toHaveBeenCalled();
+  });
+
+  it('shows error message when preview fails (e.g. 403 CSRF or 422 validation)', async () => {
+    vi.stubGlobal('$fetch', vi.fn(async () => {
+      throw Object.assign(new Error('Validation failed'), { data: { message: 'Validation failed' } });
+    }));
+    const wrapper = await mountSuspended(Compose);
+    await wrapper.find('[data-test="preview-btn"]').trigger('click');
+    await flushPromises();
+    const errEl = wrapper.find('[data-test="error-msg"]');
+    expect(errEl.exists()).toBe(true);
+    expect(errEl.text()).toContain('Validation failed');
   });
 });
