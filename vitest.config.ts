@@ -1,9 +1,5 @@
 import { defineConfig } from 'vitest/config';
-
 export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-    include: ['test/**/*.test.ts', 'server/**/*.test.ts'],
-  },
+  test: { environment: 'node', include: ['server/**/*.test.ts', 'app/**/*.test.ts'], globals: false, hookTimeout: 30000 },
+  resolve: { alias: { '~': new URL('./', import.meta.url).pathname } },
 });

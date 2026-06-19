@@ -4,16 +4,21 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["argon2", "esbuild", "sharp"]
+  },
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
     "preview": "node .output/server/index.mjs",
     "test": "vitest run",
+    "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx server/db/migrate.ts",
     "db:seed": "tsx server/db/seed.ts"
   },
   "dependencies": {
+    "argon2": "^0.44.0",
     "drizzle-orm": "0.36.4",
     "h3": "^1.15.11",
     "nuxt": "3.14.1592",
