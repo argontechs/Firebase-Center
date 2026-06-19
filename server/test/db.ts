@@ -58,6 +58,9 @@ export async function makeTestApp() {
     { default: devicesPost },
     // M4.7: operator audience listing
     { default: devicesGet },
+    // M6.6: campaign preview + create
+    { default: campaignPreviewPost },
+    { default: campaignPost },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -90,6 +93,9 @@ export async function makeTestApp() {
     import('~~/server/api/apps/[id]/devices.post'),
     // M4.7
     import('~~/server/api/apps/[id]/devices.get'),
+    // M6.6
+    import('~~/server/api/campaigns/preview.post'),
+    import('~~/server/api/campaigns/index.post'),
   ]);
 
   const app = createApp();
@@ -126,6 +132,9 @@ export async function makeTestApp() {
   router.post('/api/apps/:id/devices', eventHandler(devicesPost));
   // M4.7: operator audience listing
   router.get('/api/apps/:id/devices', eventHandler(devicesGet));
+  // M6.6: campaign preview + create
+  router.post('/api/campaigns/preview', eventHandler(campaignPreviewPost));
+  router.post('/api/campaigns', eventHandler(campaignPost));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
