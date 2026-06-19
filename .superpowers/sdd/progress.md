@@ -23,3 +23,8 @@
 - Server-to-server imports MUST use `~~/server/...` (rootDir), NOT `~/server/...` (~ = app/ srcDir → breaks `nuxt build`). vitest.config aliases ~~/@@/@/~ all to root.
 - Run `pnpm run build` at the END of each milestone (the per-task vitest run does NOT catch Nitro build/resolution failures).
 - Known issue (defer to test-infra fix): full `pnpm test` has parallel DB contention (FK/deadlock) on shared test Postgres — run DB tests serially or isolate per-file.
+
+## RESUME 2026-06-19 (after laptop died mid M1-finish)
+- M1.1–M1.12 COMPLETE (auth core + login + user management). Build gate GREEN. Login verified live (screenshot sent).
+- DEFERRED to a single test-hardening pass before final: M1.14 + M2.6 integration tests + the parallel-DB-contention fix (run DB tests serially/isolated).
+- Next: M2 (Sites & Apps). M2.1 label constant default = "Site".
