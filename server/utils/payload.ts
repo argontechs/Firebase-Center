@@ -40,10 +40,19 @@ function renderBodyForSizing(message: NeutralMessage, provider: Provider): unkno
 
   if (provider === 'huawei') {
     // Huawei: data must be a JSON-encoded string (ref §3); token list excluded.
+    // The wire body always includes validate_only and the static android block
+    // (urgency, category, notification.importance) — mirror them here so the
+    // sizing check accounts for the full ~104-byte overhead and cannot produce
+    // a false-pass (80300008 on the wire after passing the pre-flight check).
+    const urgency = message.priority === 'high' ? 'HIGH' : 'NORMAL';
+    const importance = message.priority === 'high' ? 'HIGH' : 'NORMAL';
+    const category = message.mode === 'notification' ? 'IM' : 'PLAY_VOICE';
     return {
+      validate_only: false,
       message: {
-        ...notificationBlock,
         data: JSON.stringify(message.data ?? {}),
+        android: { urgency, category, notification: { importance } },
+        ...notificationBlock,
       },
     };
   }

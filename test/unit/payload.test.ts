@@ -52,4 +52,23 @@ describe('validatePayloadSize', () => {
       expect((e as PayloadTooLargeError).bytes).toBeGreaterThan(MAX_PAYLOAD_BYTES);
     }
   });
+
+  it('huawei boundary: includes static android overhead so false-pass zone is impossible', () => {
+    // The Huawei wire body always includes validate_only + android block (~104 bytes overhead).
+    // renderBodyForSizing must account for this so a payload that measures ≤4096 in the
+    // sizing body is also ≤4096 on the wire (80300008 false-pass zone is closed).
+    //
+    // Grow data until the Huawei sizing body (with android block) exceeds 4096 bytes,
+    // then assert: n throws, n-1 does not.
+    const render = (len: number): NeutralMessage => ({
+      ...base, data: { blob: 'x'.repeat(len) },
+    });
+    let n = 3900;
+    while (n < 6000) {
+      try { validatePayloadSize(render(n), 'huawei'); n += 1; }
+      catch { break; }
+    }
+    expect(() => validatePayloadSize(render(n), 'huawei')).toThrow(PayloadTooLargeError);
+    expect(() => validatePayloadSize(render(n - 1), 'huawei')).not.toThrow();
+  });
 });
