@@ -38,3 +38,16 @@ it('rotate revokes the old key and issues version+1', async () => {
   const [oldRow] = await db.select().from(appIngestKeys).where(eq(appIngestKeys.id, first.id));
   expect(oldRow.revokedAt).not.toBeNull();
 });
+
+it('rotate on an already-revoked key throws 404 (F7 regression)', async () => {
+  // Issue a key, revoke it, then attempt to rotate the now-revoked key.
+  // Before the F7 fix, rotateIngestKey selected WITHOUT isNull(revokedAt), so it
+  // would find the revoked row and mint a fresh active successor — re-opening the
+  // write path. The fix adds isNull(revokedAt) to the guard, matching rotateSendKey.
+  const issued = await issueIngestKey(db, appId, null);
+  await revokeIngestKey(db, appId, issued.id);
+
+  await expect(rotateIngestKey(db, appId, issued.id, null)).rejects.toMatchObject({
+    statusCode: 404,
+  });
+});

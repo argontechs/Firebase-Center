@@ -82,7 +82,7 @@ export async function rotateIngestKey(
   const [old] = await db
     .select()
     .from(appIngestKeys)
-    .where(and(eq(appIngestKeys.id, keyId), eq(appIngestKeys.appId, appId)));
+    .where(and(eq(appIngestKeys.id, keyId), eq(appIngestKeys.appId, appId), isNull(appIngestKeys.revokedAt)));
   if (!old) throw createError({ statusCode: 404, statusMessage: 'ingest key not found' });
 
   // Revoke the old key
