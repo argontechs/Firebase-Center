@@ -48,3 +48,5 @@
 - TEST-HARDENING (before M7.5 + final review): label component tests (Companies->Sites), parallel-DB-contention (run integration tests serially/isolated), M1.14/M2.6/M4.0/M4.9, duplicate type-import warnings.
 - M7.1–M7.4 COMPLETE (backup.sh, RESTORE.md+roundtrip, audit coverage 18/18, cross-OS smoke). Build gate PASS. Count: 68/72.
 - REMAINING: test-hardening (vitest serial + test DB env + label tests) -> M7.5 final verification -> final whole-branch review -> fix findings.
+- TEST-HARDENING + M7.5 DONE: full vitest suite GREEN (442 passed, 1 skipped smoke). Build gate PASS. Fresh-DB migration verified. Fixes: vitest fileParallelism:false + setup-env.ts; ~/composables alias; resetDb() in credentials-security/import; label tests -> Sites.
+- System is FEATURE-COMPLETE. Remaining: FINAL whole-branch review -> fix findings -> goal met. (Deferred extra-coverage tasks M1.14/M2.6/M4.0/M4.9 are non-blocking.)
