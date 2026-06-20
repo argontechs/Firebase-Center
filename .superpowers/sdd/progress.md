@@ -46,3 +46,5 @@
 - FINAL-REVIEW TODO (from SA.3 minors): 429 Retry-After header; pre-auth per-IP throttle; document/gate X-Forwarded-For trust; per-IP rate-limit test; extract createCampaign() DRY helper.
 - M7 next (M7.1–M7.4 now; M7.5 after test-hardening). M7.3 audit coverage must include send_key_issue/rotate/revoke + api_send.
 - TEST-HARDENING (before M7.5 + final review): label component tests (Companies->Sites), parallel-DB-contention (run integration tests serially/isolated), M1.14/M2.6/M4.0/M4.9, duplicate type-import warnings.
+- M7.1–M7.4 COMPLETE (backup.sh, RESTORE.md+roundtrip, audit coverage 18/18, cross-OS smoke). Build gate PASS. Count: 68/72.
+- REMAINING: test-hardening (vitest serial + test DB env + label tests) -> M7.5 final verification -> final whole-branch review -> fix findings.
