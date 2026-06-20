@@ -13,10 +13,11 @@ interface MeResponse {
 const { data: me } = await useFetch<MeResponse>('/api/auth/me', { key: 'auth-me' });
 const userEmail = computed(() => me.value?.user?.email ?? '');
 
+// Global nav. Compose + Send history are per-app (reached from a Site's App),
+// so the global menu links the top-level destinations that actually exist.
 const navItems = [
-  { label: 'Sites',        to: '/companies' },
-  { label: 'Compose',      to: '/compose'   },
-  { label: 'Send history', to: '/history'   },
+  { label: 'Sites',               to: '/companies'          },
+  { label: 'Import credentials',  to: '/imports/credentials' },
 ] as const;
 
 function isActive(to: string): boolean {
