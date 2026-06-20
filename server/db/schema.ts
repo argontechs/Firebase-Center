@@ -139,6 +139,7 @@ export const jobs = pgTable('jobs', {
   idempotencyKey: text('idempotency_key').notNull(),
   lastError: text('last_error'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  campaignId: uuid('campaign_id').references(() => campaigns.id),
 }, (t) => ({ uq: unique().on(t.type, t.idempotencyKey) }));
 
 export const auditLog = pgTable('audit_log', {

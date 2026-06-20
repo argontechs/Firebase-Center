@@ -56,6 +56,7 @@ export async function enqueueCampaign(campaignId: string): Promise<{ jobsCreated
         type: JOB_TYPE_SEND,
         payloadJsonb: payload,
         idempotencyKey: `${campaignId}:${chunkIndex}`,
+        campaignId,
       });
       chunkIndex += 1;
     }

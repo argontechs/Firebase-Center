@@ -1,6 +1,6 @@
 import { db } from '~~/server/db/client';
 import { jobs, campaigns, devices, deliveries } from '~~/server/db/schema';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { resolveCredential } from '~~/server/utils/credentials/resolve';
 import { getAdapter } from '~~/server/utils/push/registry';
 import { getAccessToken, invalidateToken } from '~~/server/utils/push/token-cache';
@@ -42,6 +42,66 @@ export async function claimNextJob(): Promise<typeof jobs.$inferSelect | null> {
 
   const [row] = await db.select().from(jobs).where(eq(jobs.id, claimed.id));
   return row ?? null;
+}
+
+/**
+ * Idempotently advance a campaign from queued → sending when the first job for
+ * that campaign is claimed.  The WHERE clause ensures we only update if it is
+ * still in the queued state so concurrent workers do not race.
+ */
+async function advanceCampaignToSending(campaignId: string) {
+  await db
+    .update(campaigns)
+    .set({ status: 'sending' })
+    .where(and(eq(campaigns.id, campaignId), eq(campaigns.status, 'queued')));
+}
+
+const TERMINAL_JOB_STATUSES = ['done', 'failed'] as const;
+
+/**
+ * After a job for a campaign reaches a terminal state (done or failed), check
+ * whether ALL jobs for that campaign are now terminal.  If so, set the campaign
+ * status to `done` or `failed` depending on whether any delivery has a negative
+ * disposition (gave_up or failed).
+ */
+async function maybeFinalizeCampaign(campaignId: string) {
+  // Check for any non-terminal jobs still belonging to this campaign.
+  const nonTerminal = await db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.campaignId, campaignId),
+        notInArray(jobs.status, TERMINAL_JOB_STATUSES as unknown as string[]),
+      ),
+    )
+    .limit(1);
+
+  if (nonTerminal.length > 0) return; // Still in-flight — nothing to finalize yet.
+
+  // All jobs are terminal. Determine the outcome by checking for bad deliveries.
+  const badDeliveries = await db
+    .select({ id: deliveries.id })
+    .from(deliveries)
+    .where(
+      and(
+        eq(deliveries.campaignId, campaignId),
+        inArray(deliveries.status, ['gave_up', 'failed'] as const),
+      ),
+    )
+    .limit(1);
+
+  const finalStatus = badDeliveries.length > 0 ? 'failed' : 'done';
+  await db
+    .update(campaigns)
+    .set({ status: finalStatus })
+    .where(
+      and(
+        eq(campaigns.id, campaignId),
+        // Only move forward — do not accidentally regress from done/failed.
+        inArray(campaigns.status, ['queued', 'sending'] as const),
+      ),
+    );
 }
 
 function toNeutral(camp: typeof campaigns.$inferSelect): NeutralMessage {
@@ -182,6 +242,12 @@ export async function runWorkerOnce(): Promise<boolean> {
   const job = await claimNextJob();
   if (!job) return false;
   const payload = job.payloadJsonb as SendChunkPayload;
+
+  // F6: on first claim, idempotently advance campaign queued → sending.
+  if (payload.campaignId) {
+    await advanceCampaignToSending(payload.campaignId);
+  }
+
   try {
     const { results, credentialId } = await processSendChunk(job);
     const { retryable, terminal } = classify(results);
@@ -222,12 +288,16 @@ export async function runWorkerOnce(): Promise<boolean> {
           lastError: `non-transient: ${terminal[0].disposition}`,
         })
         .where(eq(jobs.id, job.id));
+      // F6: check if all jobs for this campaign are now terminal.
+      if (payload.campaignId) await maybeFinalizeCampaign(payload.campaignId);
       return true;
     }
 
     // No retryable results: job is fully done.
     if (retryable.length === 0) {
       await db.update(jobs).set({ status: 'done' }).where(eq(jobs.id, job.id));
+      // F6: check if all jobs for this campaign are now terminal.
+      if (payload.campaignId) await maybeFinalizeCampaign(payload.campaignId);
       return true;
     }
 
@@ -264,6 +334,8 @@ export async function runWorkerOnce(): Promise<boolean> {
           sentAt: null,
         })),
       );
+      // F6: check if all jobs for this campaign are now terminal.
+      if (payload.campaignId) await maybeFinalizeCampaign(payload.campaignId);
       return true;
     }
 
@@ -295,6 +367,8 @@ export async function runWorkerOnce(): Promise<boolean> {
           lastError: errMsg,
         })
         .where(eq(jobs.id, job.id));
+      // F6: check if all jobs for this campaign are now terminal.
+      if (payload.campaignId) await maybeFinalizeCampaign(payload.campaignId);
     } else {
       await db
         .update(jobs)
