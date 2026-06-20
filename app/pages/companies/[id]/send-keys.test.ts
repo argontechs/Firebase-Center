@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { defineComponent, ref, nextTick, h, Suspense } from 'vue';
 import { createRouter, createMemoryHistory } from 'vue-router';
@@ -63,6 +63,23 @@ beforeEach(() => {
   mockKeys.value = [];
   fetchMock.mockReset();
   fetchMock.mockResolvedValue({});
+});
+
+// Ensure any vi.stubGlobal() calls in individual tests are cleaned up after each
+// test, so a thrown assertion cannot leak a modified stub into later tests.
+afterEach(() => {
+  vi.unstubAllGlobals();
+  // Re-apply the module-level stubs that the rest of the suite depends on.
+  vi.stubGlobal('useFetch', (url: string) => {
+    if (url.includes('/send-keys')) return { data: mockKeys, refresh: vi.fn() };
+    return { data: ref(null), refresh: vi.fn() };
+  });
+  vi.stubGlobal('$fetch', fetchMock);
+  vi.stubGlobal('useCsrf', () => ({
+    token: ref('test-token'),
+    fetchToken: vi.fn().mockResolvedValue(undefined),
+    headers: () => csrfHeaders,
+  }));
 });
 
 describe('send-keys page', () => {
@@ -151,11 +168,11 @@ describe('send-keys page', () => {
 
   it('calls fetchToken() before issuing (CSRF guard)', async () => {
     const fetchTokenSpy = vi.fn().mockResolvedValue(undefined);
-    (globalThis as any).useCsrf = () => ({
+    vi.stubGlobal('useCsrf', () => ({
       token: ref('test-token'),
       fetchToken: fetchTokenSpy,
       headers: () => csrfHeaders,
-    });
+    }));
 
     // Re-mount after updating stub
     fetchMock.mockResolvedValue({ id: 'k-new', fullKey: 'bo_sk_X', keyPrefix: 'bo_sk_', version: 1 });
@@ -164,30 +181,33 @@ describe('send-keys page', () => {
     await nextTick();
     await nextTick();
     expect(fetchTokenSpy).toHaveBeenCalled();
-
-    // Restore
-    (globalThis as any).useCsrf = () => ({
-      token: ref('test-token'),
-      fetchToken: vi.fn().mockResolvedValue(undefined),
-      headers: () => csrfHeaders,
-    });
   });
 
   // -----------------------------------------------------------------------
   // Revoke
   // -----------------------------------------------------------------------
-  it('revoke button calls the revoke endpoint with CSRF headers', async () => {
+  it('revoke button calls fetchToken() then the revoke endpoint with CSRF headers', async () => {
     mockKeys.value = [
       { id: 'k1', keyPrefix: 'bo_sk_abc', version: 1, label: null, createdAt: '2026-01-01T00:00:00Z', revokedAt: null },
     ];
     fetchMock.mockResolvedValue(undefined);
+
+    const fetchTokenSpy = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('useCsrf', () => ({
+      token: ref('test-token'),
+      fetchToken: fetchTokenSpy,
+      headers: () => csrfHeaders,
+    }));
 
     const wrapper = await mountPage();
     await wrapper.find('[data-testid="revoke-k1"]').trigger('click');
     await nextTick();
     await nextTick();
 
-    // Must have called the revoke endpoint
+    // Must have called fetchToken() before sending the request (CSRF contract).
+    expect(fetchTokenSpy).toHaveBeenCalled();
+
+    // Must have called the revoke endpoint with CSRF headers.
     const revokeCalls = fetchMock.mock.calls.filter(([url, opts]) =>
       url.includes('/revoke') && opts?.method === 'POST'
     );
