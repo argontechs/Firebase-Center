@@ -66,7 +66,7 @@ export default defineEventHandler(async (event) => {
   validateHuaweiClickAction(message);
 
   // Resolve the audience and validate payload size per distinct provider.
-  const groups = await previewAudience(body.appId, body.targetType, body.targetValue);
+  const groups = await previewAudience(body.appId, body.targetType, body.targetValue, body.providerScope);
   const providers = [...new Set(groups.map((g) => g.provider))] as Provider[];
   const checkProviders = providers.length > 0 ? providers : (['fcm'] as Provider[]);
 

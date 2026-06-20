@@ -43,7 +43,7 @@ export default defineEventHandler(async (event) => {
     ...(body.image ? { image: body.image } : {}),
   };
 
-  const byGroup = await previewAudience(body.appId, body.targetType, body.targetValue ?? {});
+  const byGroup = await previewAudience(body.appId, body.targetType, body.targetValue ?? {}, body.providerScope);
 
   // Measure payload size per distinct provider; track overall byte count and limit flag.
   const providers = [...new Set(byGroup.map((g) => g.provider))] as Provider[];

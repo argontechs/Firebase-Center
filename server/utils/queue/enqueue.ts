@@ -9,16 +9,19 @@ async function resolveAudience(campaignId: string): Promise<typeof devices.$infe
   const [camp] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
   if (!camp) throw new Error(`campaign ${campaignId} not found`);
 
+  // F5: enforce providerScope — filter devices to the requested provider when not 'both'
+  const scopeFilter = camp.providerScope !== 'both' ? eq(devices.provider, camp.providerScope) : undefined;
+
   if (camp.targetType === 'all') {
     return db.select().from(devices)
-      .where(and(eq(devices.appId, camp.appId), eq(devices.status, 'active')))
+      .where(and(eq(devices.appId, camp.appId), eq(devices.status, 'active'), scopeFilter))
       .orderBy(asc(devices.provider), asc(devices.platform), asc(devices.id));
   }
   if (camp.targetType === 'tokens') {
     const ids = ((camp.targetValueJsonb as { device_ids?: string[] }).device_ids) ?? [];
     if (ids.length === 0) return [];
     return db.select().from(devices)
-      .where(and(eq(devices.appId, camp.appId), eq(devices.status, 'active'), inArray(devices.id, ids)))
+      .where(and(eq(devices.appId, camp.appId), eq(devices.status, 'active'), inArray(devices.id, ids), scopeFilter))
       .orderBy(asc(devices.provider), asc(devices.platform), asc(devices.id));
   }
   // segment | topic are reserved enum values — rejected upstream at validation; defensive here.

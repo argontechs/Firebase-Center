@@ -95,4 +95,54 @@ describe('enqueueCampaign', () => {
     const payload = rows[0].payloadJsonb as { deviceIds: string[] };
     expect(payload.deviceIds).toEqual([d1.id]);
   });
+
+  // F5: providerScope must be enforced — a campaign with providerScope:'fcm' must
+  // only enqueue FCM chunks, even when Huawei devices exist in the same app.
+  it('providerScope:fcm enqueues only fcm chunks (huawei devices ignored)', async () => {
+    const { app } = await makeApp();
+    await makeDevice(app.id, { provider: 'fcm', platform: 'android' });
+    await makeDevice(app.id, { provider: 'huawei', platform: 'huawei' }); // must be excluded
+    const camp = await makeCampaign(app.id, { targetType: 'all', providerScope: 'fcm' });
+
+    const res = await enqueueCampaign(camp.id);
+    expect(res.jobsCreated).toBe(1);
+
+    const rows = await db.select().from(jobs).where(eq(jobs.type, JOB_TYPE_SEND));
+    expect(rows).toHaveLength(1);
+    const payload = rows[0].payloadJsonb as { provider: string };
+    expect(payload.provider).toBe('fcm');
+  });
+
+  // F5: mirror test for providerScope:'huawei'
+  it('providerScope:huawei enqueues only huawei chunks (fcm devices ignored)', async () => {
+    const { app } = await makeApp();
+    await makeDevice(app.id, { provider: 'fcm', platform: 'android' }); // must be excluded
+    await makeDevice(app.id, { provider: 'huawei', platform: 'huawei' });
+    const camp = await makeCampaign(app.id, { targetType: 'all', providerScope: 'huawei' });
+
+    const res = await enqueueCampaign(camp.id);
+    expect(res.jobsCreated).toBe(1);
+
+    const rows = await db.select().from(jobs).where(eq(jobs.type, JOB_TYPE_SEND));
+    expect(rows).toHaveLength(1);
+    const payload = rows[0].payloadJsonb as { provider: string };
+    expect(payload.provider).toBe('huawei');
+  });
+
+  // F5: providerScope:'both' must still enqueue chunks for all providers
+  it('providerScope:both enqueues chunks for all providers', async () => {
+    const { app } = await makeApp();
+    await makeDevice(app.id, { provider: 'fcm', platform: 'android' });
+    await makeDevice(app.id, { provider: 'huawei', platform: 'huawei' });
+    const camp = await makeCampaign(app.id, { targetType: 'all', providerScope: 'both' });
+
+    const res = await enqueueCampaign(camp.id);
+    expect(res.jobsCreated).toBe(2);
+
+    const rows = await db.select().from(jobs).where(eq(jobs.type, JOB_TYPE_SEND));
+    expect(rows).toHaveLength(2);
+    const providers = new Set(rows.map(r => (r.payloadJsonb as { provider: string }).provider));
+    expect(providers).toContain('fcm');
+    expect(providers).toContain('huawei');
+  });
 });

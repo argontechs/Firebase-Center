@@ -4,6 +4,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { resolveCredential } from '~~/server/utils/credentials/resolve';
 import type { Provider, DevicePlatform } from '~~/server/utils/push/types';
 
+export type ProviderScope = 'fcm' | 'huawei' | 'both';
+
 export interface GroupPreview {
   provider: Provider;
   platform: DevicePlatform;
@@ -15,16 +17,20 @@ export interface GroupPreview {
  * Returns the audience broken down per (provider, platform) group, with
  * recipient counts and credential readiness for each group.
  *
- * @param appId      - the App to query devices for
- * @param targetType - 'all' = all active devices; 'tokens' = explicit device_ids subset
- * @param targetValue - for 'tokens': { device_ids: string[] }
+ * @param appId         - the App to query devices for
+ * @param targetType    - 'all' = all active devices; 'tokens' = explicit device_ids subset
+ * @param targetValue   - for 'tokens': { device_ids: string[] }
+ * @param providerScope - F5: restrict audience to a single provider ('fcm'|'huawei') or keep 'both'
  */
 export async function previewAudience(
   appId: string,
   targetType: 'all' | 'tokens',
   targetValue: { device_ids?: string[] },
+  providerScope: ProviderScope = 'both',
 ): Promise<GroupPreview[]> {
-  const baseWhere = and(eq(devices.appId, appId), eq(devices.status, 'active'));
+  // F5: filter devices to the requested provider when not 'both'
+  const scopeFilter = providerScope !== 'both' ? eq(devices.provider, providerScope) : undefined;
+  const baseWhere = and(eq(devices.appId, appId), eq(devices.status, 'active'), scopeFilter);
   const rows =
     targetType === 'tokens'
       ? await db.select().from(devices).where(
