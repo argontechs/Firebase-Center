@@ -65,4 +65,29 @@ describe('company CRUD', () => {
   it('returns 404 reading a non-existent company', async () => {
     await expect(fetch('/api/companies/00000000-0000-0000-0000-000000000000')).rejects.toMatchObject({ statusCode: 404 });
   });
+
+  // F9 regression: unique-violation and FK-violation must return 409, not 500.
+  it('returns 409 when creating a company with a duplicate name', async () => {
+    await fetch('/api/companies', { method: 'POST', body: { name: 'DupeName Co' } });
+    await expect(
+      fetch('/api/companies', { method: 'POST', body: { name: 'DupeName Co' } }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('returns 409 when renaming a company to a name that already exists', async () => {
+    const a = await fetch('/api/companies', { method: 'POST', body: { name: 'Alpha Corp' } });
+    await fetch('/api/companies', { method: 'POST', body: { name: 'Beta Corp' } });
+    await expect(
+      fetch(`/api/companies/${a.id}`, { method: 'PATCH', body: { name: 'Beta Corp' } }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('returns 409 when deleting a company that still has apps', async () => {
+    const company = await fetch('/api/companies', { method: 'POST', body: { name: 'Has Apps Co' } });
+    // Create an app under the company (child FK reference).
+    await fetch('/api/apps', { method: 'POST', body: { companyId: company.id, name: 'Child App' } });
+    await expect(
+      fetch(`/api/companies/${company.id}`, { method: 'DELETE' }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
 });

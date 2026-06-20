@@ -4,6 +4,7 @@ import { db } from '~~/server/db/client';
 import { apps, companies } from '~~/server/db/schema';
 import { requireSession } from '~~/server/utils/auth/guard';
 import { parseAppCreate } from '~~/server/utils/validation/app';
+import { isUniqueViolation } from '~~/server/utils/db-errors';
 
 export default defineEventHandler(async (event) => {
   await requireSession(event);
@@ -11,7 +12,14 @@ export default defineEventHandler(async (event) => {
   const input = parseAppCreate(await readBody(event));
   const [company] = await db.select({ id: companies.id }).from(companies).where(eq(companies.id, input.companyId));
   if (!company) throw createError({ statusCode: 404, statusMessage: 'company not found' });
-  const [row] = await db.insert(apps).values(input).returning();
-  setResponseStatus(event, 201);
-  return row;
+  try {
+    const [row] = await db.insert(apps).values(input).returning();
+    setResponseStatus(event, 201);
+    return row;
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw createError({ statusCode: 409, statusMessage: 'An app with that name already exists in this company' });
+    }
+    throw err;
+  }
 });

@@ -82,4 +82,41 @@ describe('app CRUD scoped to company', () => {
     const listB = await fetch(`/api/apps?companyId=${b.id}`);
     expect(listB).toHaveLength(0);
   });
+
+  // F9 regression: unique-violation and FK-violation must return 409, not 500.
+  it('returns 409 when creating an app with a duplicate name within the same company', async () => {
+    const company = await makeCompany();
+    await fetch('/api/apps', { method: 'POST', body: { companyId: company.id, name: 'Duplicate App' } });
+    await expect(
+      fetch('/api/apps', { method: 'POST', body: { companyId: company.id, name: 'Duplicate App' } }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('allows the same app name across different companies (unique per company)', async () => {
+    const a = await makeCompany();
+    const b = await fetch('/api/companies', { method: 'POST', body: { name: 'Umbrella Corp' } });
+    await fetch('/api/apps', { method: 'POST', body: { companyId: a.id, name: 'Shared Name' } });
+    // Should NOT throw — different company means no unique collision.
+    const row = await fetch('/api/apps', { method: 'POST', body: { companyId: b.id, name: 'Shared Name' } });
+    expect(row).toMatchObject({ name: 'Shared Name', companyId: b.id });
+  });
+
+  it('returns 409 when renaming an app to a name already used in the same company', async () => {
+    const company = await makeCompany();
+    const app1 = await fetch('/api/apps', { method: 'POST', body: { companyId: company.id, name: 'First App' } });
+    await fetch('/api/apps', { method: 'POST', body: { companyId: company.id, name: 'Second App' } });
+    await expect(
+      fetch(`/api/apps/${app1.id}`, { method: 'PATCH', body: { name: 'Second App' } }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('returns 409 when deleting an app that still has child records (ingest-key)', async () => {
+    const company = await makeCompany();
+    const app = await fetch('/api/apps', { method: 'POST', body: { companyId: company.id, name: 'App With Children' } });
+    // Create an ingest-key as a child FK reference on app_id.
+    await fetch(`/api/apps/${app.id}/ingest-keys`, { method: 'POST', body: { label: 'test-key' } });
+    await expect(
+      fetch(`/api/apps/${app.id}`, { method: 'DELETE' }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
 });
