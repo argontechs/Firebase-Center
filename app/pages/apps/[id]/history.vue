@@ -62,7 +62,7 @@ function deliveryBadgeClass(status: string): string {
   <div class="history-page">
     <div class="page-head">
       <div class="page-head-text">
-        <h1 class="page-head-title">History</h1>
+        <h2 class="page-head-title">History</h2>
         <p class="page-head-subtitle">Campaigns sent from this app, with per-device delivery counts.</p>
       </div>
     </div>

@@ -14,11 +14,20 @@ vi.stubGlobal('useFetch', (_url: string) => {
 
 vi.stubGlobal('$fetch', vi.fn().mockResolvedValue({}));
 
-// NuxtLink stub as a render-function component (no runtime template compiler needed).
+// NuxtLink stub: renders an <a> so we can inspect the href / text content.
 const NuxtLink = defineComponent({
+  name: 'NuxtLink',
   props: { to: { type: [String, Object] } },
   setup(props, { slots }) {
     return () => h('a', { href: String(props.to) }, slots.default?.());
+  },
+});
+
+// NuxtPage stub: renders a sentinel so the outlet is present.
+const NuxtPage = defineComponent({
+  name: 'NuxtPage',
+  setup() {
+    return () => h('div', { 'data-stub': 'NuxtPage' });
   },
 });
 
@@ -43,7 +52,13 @@ async function mountPage() {
     defineComponent({
       setup() { return () => h(Suspense, null, { default: () => h(AppDetail) }); },
     }),
-    { global: { plugins: [router], components: { NuxtLink }, stubs: { NuxtLink } } },
+    {
+      global: {
+        plugins: [router],
+        components: { NuxtLink, NuxtPage },
+        stubs: { NuxtLink, NuxtPage },
+      },
+    },
   );
   await nextTick();
   await nextTick();
@@ -63,14 +78,34 @@ describe('app detail shell', () => {
     expect(wrapper.find('[data-test="app-title"]').text()).toContain('Acme Shopper');
   });
 
-  it('renders all five tab placeholders', async () => {
+  it('renders exactly five tab links', async () => {
     const wrapper = await mountPage();
-    const tabs = wrapper.findAll('[data-test="app-tab"]').map((t) => t.text());
-    expect(tabs).toEqual(['Credentials', 'Devices', 'Ingest Keys', 'Compose', 'History']);
+    const tabs = wrapper.findAll('[data-test="app-tab"]');
+    expect(tabs).toHaveLength(5);
   });
 
-  it('marks unbuilt tabs as coming soon', async () => {
+  it('tab labels are correct', async () => {
     const wrapper = await mountPage();
-    expect(wrapper.find('[data-test="tab-panel"]').text()).toContain('Coming soon');
+    const labels = wrapper.findAll('[data-test="app-tab"]').map((t) => t.text());
+    expect(labels).toEqual(['Credentials', 'Devices', 'Ingest Keys', 'Compose', 'History']);
+  });
+
+  it('tab links point to the correct child routes', async () => {
+    const wrapper = await mountPage();
+    const hrefs = wrapper.findAll('[data-test="app-tab"]').map((t) => t.attributes('href'));
+    expect(hrefs).toEqual([
+      '/apps/a1/credentials',
+      '/apps/a1/devices',
+      '/apps/a1/ingest-keys',
+      '/apps/a1/compose',
+      '/apps/a1/history',
+    ]);
+  });
+
+  it('tab-panel contains a NuxtPage outlet', async () => {
+    const wrapper = await mountPage();
+    const panel = wrapper.find('[data-test="tab-panel"]');
+    expect(panel.exists()).toBe(true);
+    expect(panel.find('[data-stub="NuxtPage"]').exists()).toBe(true);
   });
 });

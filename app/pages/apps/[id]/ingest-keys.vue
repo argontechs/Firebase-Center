@@ -61,7 +61,7 @@ onMounted(refresh);
   <div>
     <div class="page-head">
       <div class="page-head-text">
-        <h1>Ingest keys</h1>
+        <h2>Ingest keys</h2>
         <p class="page-head-subtitle">Keys are shown in full only once, immediately after issue or rotate. Only the prefix is stored and displayed afterwards.</p>
       </div>
       <div class="page-head-actions">

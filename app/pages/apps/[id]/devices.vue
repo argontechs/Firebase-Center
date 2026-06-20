@@ -50,7 +50,7 @@ async function runImport() {
   <div>
     <div class="page-head">
       <div class="page-head-text">
-        <h1>Devices</h1>
+        <h2>Devices</h2>
         <p class="page-head-subtitle">Import device tokens from a CSV or JSON file in three steps.</p>
       </div>
     </div>

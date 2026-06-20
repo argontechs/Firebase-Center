@@ -62,7 +62,7 @@ onMounted(reload);
   <div>
     <div class="page-head">
       <div class="page-head-text">
-        <h1>Credentials</h1>
+        <h2>Credentials</h2>
         <p class="page-head-subtitle">Write-only push credentials per provider and platform. Secrets are never shown after save.</p>
       </div>
     </div>

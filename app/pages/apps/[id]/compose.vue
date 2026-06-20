@@ -88,7 +88,7 @@ async function send() {
   <div class="compose-page">
     <div class="page-head">
       <div class="page-head-text">
-        <h1 class="page-head-title">Compose</h1>
+        <h2 class="page-head-title">Compose</h2>
         <p class="page-head-subtitle">Send a push notification or data message to this app's devices.</p>
       </div>
     </div>
