@@ -17,6 +17,7 @@
     "preview": "node .output/server/index.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:scripts": "vitest run test/scripts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx server/db/migrate.ts",
     "db:seed": "tsx server/db/seed.ts"
