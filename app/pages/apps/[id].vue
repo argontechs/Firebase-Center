@@ -14,13 +14,18 @@ const activeTab = ref<(typeof tabs)[number]>('Credentials');
 </script>
 
 <template>
-  <section>
-    <h1 data-test="app-title">{{ app?.name }}</h1>
+  <div>
+    <div class="page-head">
+      <div class="page-head-text">
+        <h1 data-test="app-title" class="page-head-title">{{ app?.name }}</h1>
+      </div>
+    </div>
 
-    <nav data-test="tab-strip">
+    <nav class="tab-strip" data-test="tab-strip">
       <button
         v-for="t in tabs"
         :key="t"
+        class="tab-item"
         data-test="app-tab"
         :class="{ active: activeTab === t }"
         @click="activeTab = t"
@@ -28,7 +33,10 @@ const activeTab = ref<(typeof tabs)[number]>('Credentials');
     </nav>
 
     <div data-test="tab-panel">
-      <p>{{ activeTab }} — Coming soon</p>
+      <div class="empty">
+        <p class="empty-message">{{ activeTab }}: Coming soon</p>
+        <p class="empty-hint">This section will be available in a future update.</p>
+      </div>
     </div>
-  </section>
+  </div>
 </template>

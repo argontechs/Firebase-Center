@@ -85,55 +85,194 @@ async function send() {
 </script>
 
 <template>
-  <section class="compose">
-    <h1>Compose</h1>
-    <label>Title <input v-model="title" data-test="title" /></label>
-    <label>Body <textarea v-model="body" data-test="body" /></label>
-    <label>Data (JSON) <textarea v-model="dataText" data-test="data" /></label>
-
-    <label>Mode
-      <select v-model="mode" data-test="mode">
-        <option value="notification">notification</option>
-        <option value="data">data</option>
-      </select>
-    </label>
-    <label>Priority
-      <select v-model="priority" data-test="priority">
-        <option value="high">high</option>
-        <option value="normal">normal</option>
-      </select>
-    </label>
-    <label>Target
-      <select v-model="targetType" data-test="target">
-        <option value="all">all devices</option>
-        <option value="tokens">specific devices</option>
-      </select>
-    </label>
-    <label v-if="targetType === 'tokens'">Device IDs (comma-separated)
-      <input v-model="deviceIdsText" data-test="device-ids" />
-    </label>
-
-    <button data-test="preview-btn" @click="preview">Preview recipients</button>
-
-    <div v-if="previewed" class="preview">
-      <ul>
-        <li
-          v-for="g in byGroup"
-          :key="`${g.provider}-${g.platform}`"
-          :data-test="`group-${g.provider}-${g.platform}`"
-          :class="{ 'not-ready': !g.ready }"
-        >
-          {{ g.provider }} / {{ g.platform }} — {{ g.count }} device(s)
-          <span v-if="!g.ready" class="warn">credential not ready</span>
-        </li>
-      </ul>
-      <p data-test="within-limit">
-        Payload {{ totalBytes }} bytes — {{ withinLimit ? 'OK (≤ 4096)' : 'TOO LARGE (&gt; 4096)' }}
-      </p>
+  <div class="compose-page">
+    <div class="page-head">
+      <div class="page-head-text">
+        <h1 class="page-head-title">Compose</h1>
+        <p class="page-head-subtitle">Send a push notification or data message to this app's devices.</p>
+      </div>
     </div>
 
-    <button data-test="send-btn" :disabled="!canSend" @click="send">Send</button>
+    <div class="panel compose-panel">
+      <!-- Message content -->
+      <div class="stack">
+        <div class="field">
+          <label class="field-label" for="compose-title">Title</label>
+          <input
+            id="compose-title"
+            v-model="title"
+            data-test="title"
+            type="text"
+            placeholder="Notification title"
+          />
+        </div>
 
-    <p v-if="error" data-test="error-msg" class="error">{{ error }}</p>
-  </section>
+        <div class="field">
+          <label class="field-label" for="compose-body">Body</label>
+          <textarea
+            id="compose-body"
+            v-model="body"
+            data-test="body"
+            placeholder="Notification body text"
+          ></textarea>
+        </div>
+
+        <div class="field field-mono">
+          <label class="field-label" for="compose-data">Data (JSON)</label>
+          <textarea
+            id="compose-data"
+            v-model="dataText"
+            data-test="data"
+            placeholder="{}"
+            style="min-height: 72px;"
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- Mode, priority, target row -->
+      <div class="form-row section-gap">
+        <div class="field">
+          <label class="field-label" for="compose-mode">Mode</label>
+          <select id="compose-mode" v-model="mode" data-test="mode">
+            <option value="notification">notification</option>
+            <option value="data">data</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="compose-priority">Priority</label>
+          <select id="compose-priority" v-model="priority" data-test="priority">
+            <option value="high">high</option>
+            <option value="normal">normal</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="compose-target">Target</label>
+          <select id="compose-target" v-model="targetType" data-test="target">
+            <option value="all">all devices</option>
+            <option value="tokens">specific devices</option>
+          </select>
+        </div>
+      </div>
+
+      <div v-if="targetType === 'tokens'" class="field row-gap">
+        <label class="field-label" for="compose-device-ids">Device IDs (comma-separated)</label>
+        <input
+          id="compose-device-ids"
+          v-model="deviceIdsText"
+          data-test="device-ids"
+          type="text"
+          placeholder="token1, token2, token3"
+          class="mono"
+        />
+      </div>
+
+      <!-- Preview action -->
+      <div class="compose-actions row-gap">
+        <button class="btn btn-ghost" data-test="preview-btn" @click="preview">
+          Preview recipients
+        </button>
+      </div>
+
+      <!-- Recipient preview -->
+      <div v-if="previewed" class="compose-preview section-gap">
+        <p class="compose-preview-label text-xs font-medium text-muted" style="margin-bottom: 10px;">
+          Recipients by provider / platform
+        </p>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Platform</th>
+                <th>Devices</th>
+                <th>Readiness</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="g in byGroup"
+                :key="`${g.provider}-${g.platform}`"
+                :data-test="`group-${g.provider}-${g.platform}`"
+                :class="{ 'not-ready': !g.ready }"
+              >
+                <td class="mono">{{ g.provider }}</td>
+                <td class="mono">{{ g.platform }}</td>
+                <td>{{ g.count }}</td>
+                <td>
+                  <span v-if="g.ready" class="badge badge-ok">ready</span>
+                  <span v-else class="badge badge-warn">credential not ready</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p
+          data-test="within-limit"
+          class="compose-payload-note text-xs"
+          :class="withinLimit ? 'text-muted' : 'text-danger'"
+          style="margin-top: 10px;"
+        >
+          Payload {{ totalBytes }} bytes - {{ withinLimit ? 'OK (≤ 4096)' : 'TOO LARGE (> 4096)' }}
+        </p>
+      </div>
+
+      <!-- Error -->
+      <p v-if="error" data-test="error-msg" role="alert" class="text-danger text-sm" style="margin-top: 12px;">
+        {{ error }}
+      </p>
+
+      <!-- Send -->
+      <div class="compose-send-row section-gap">
+        <button
+          class="btn btn-primary compose-send-btn"
+          data-test="send-btn"
+          :disabled="!canSend"
+          @click="send"
+        >
+          {{ sending ? 'Sending...' : 'Send' }}
+        </button>
+        <span v-if="!previewed" class="text-xs text-faint">Preview recipients first to enable Send.</span>
+        <span v-else-if="!withinLimit" class="text-xs text-danger">Payload too large to send.</span>
+      </div>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.compose-page {
+  max-width: 680px;
+}
+
+.compose-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.compose-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.compose-preview-label {
+  font-weight: 550;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.compose-send-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.compose-send-btn {
+  padding: 10px 28px;
+  font-size: var(--t-base);
+}
+</style>
