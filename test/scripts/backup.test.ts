@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from 'pg';
@@ -17,8 +17,17 @@ const pgClientConfig = {
 };
 
 // Ensure pg_dump / pg_restore are on PATH (Homebrew libpq on macOS is keg-only).
-const LIBPQ_BIN = '/opt/homebrew/opt/libpq/bin';
-const PATH_WITH_PG = `${LIBPQ_BIN}:${process.env.PATH ?? ''}`;
+// We probe the two common Homebrew prefixes (Apple Silicon / Intel) so the
+// suite works on both architectures and on Linux (where pg_restore is already
+// on PATH and neither directory exists).
+const HOMEBREW_LIBPQ_CANDIDATES = [
+  '/opt/homebrew/opt/libpq/bin', // Apple Silicon
+  '/usr/local/opt/libpq/bin',    // Intel Mac
+];
+const LIBPQ_BIN = HOMEBREW_LIBPQ_CANDIDATES.find((d) => existsSync(d)) ?? '';
+const PATH_WITH_PG = LIBPQ_BIN
+  ? `${LIBPQ_BIN}:${process.env.PATH ?? ''}`
+  : (process.env.PATH ?? '');
 
 let backupDir: string;
 
@@ -51,11 +60,13 @@ describe('scripts/backup.sh', () => {
     expect(dumps.length).toBe(1);
     expect(dumps[0]).toMatch(/^firebase-center-.*\.dump$/);
 
-    // pg_restore --list exits 0 only on a valid archive
+    // pg_restore --list exits 0 only on a valid archive.
+    // Resolve via PATH (which already includes LIBPQ_BIN when on macOS) so this
+    // works on Intel Mac and Linux without a hardcoded absolute path.
     const listing = execFileSync(
-      join(LIBPQ_BIN, 'pg_restore'),
+      'pg_restore',
       ['--list', join(backupDir, dumps[0])],
-      { encoding: 'utf8' },
+      { encoding: 'utf8', env: { ...process.env, PATH: PATH_WITH_PG } },
     );
     expect(listing).toContain('smoke_marker');
   });
