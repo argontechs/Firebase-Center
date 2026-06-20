@@ -3,6 +3,7 @@ import { db } from '~~/server/db/client';
 import { appCredentials, apps, companies, users, auditLog } from '~~/server/db/schema';
 import { decryptSecret } from '~~/server/utils/crypto';
 import { parseCredentialManifest, importCredentials } from '~~/server/utils/import/credentials';
+import { resolveCredential } from '~~/server/utils/credentials/resolve';
 import { resetDb } from '~~/server/test/db';
 import { and, eq } from 'drizzle-orm';
 
@@ -49,15 +50,23 @@ describe('importCredentials', () => {
     expect(decryptSecret({ ciphertext: cred.secretCiphertext, nonce: cred.secretNonce, tag: cred.secretTag, keyVersion: cred.keyVersion })).toBe(SA);
   });
 
-  it('encrypts the Huawei app_secret and stores app_id/huawei_project_id in meta', async () => {
+  it('encrypts the Huawei credentials as a JSON object and stores canonical meta keys so the credential is ready', async () => {
     const csv = 'company,app,provider,platform,label,app_id,app_secret,huawei_project_id\nGlobex,Main,huawei,huawei,HW,10086,sek-xyz,hw-proj\n';
     const res = await importCredentials({ userId, manifestCsv: csv, files: {} });
     expect(res).toMatchObject({ created: 1, failed: 0 });
     const [cred] = await db.select().from(appCredentials);
+    // meta must use the canonical keys the adapter and isReady() depend on
     expect((cred.metaJsonb as any).app_id).toBe('10086');
-    expect((cred.metaJsonb as any).huawei_project_id).toBe('hw-proj');
+    expect((cred.metaJsonb as any).project_id).toBe('hw-proj');      // canonical key for v2 URL selection
+    expect((cred.metaJsonb as any).push_kit_enabled).toBe(true);     // required by isReady()
+    expect((cred.metaJsonb as any).huawei_project_id).toBeUndefined(); // wrong legacy key must be absent
+    // secret must be a JSON object (HuaweiSecret shape) so resolve.ts JSON.parse succeeds
     expect(cred.secretCiphertext).not.toContain('sek-xyz');
-    expect(decryptSecret({ ciphertext: cred.secretCiphertext, nonce: cred.secretNonce, tag: cred.secretTag, keyVersion: cred.keyVersion })).toBe('sek-xyz');
+    const plaintext = decryptSecret({ ciphertext: cred.secretCiphertext, nonce: cred.secretNonce, tag: cred.secretTag, keyVersion: cred.keyVersion });
+    const secret = JSON.parse(plaintext);
+    expect(secret.appId).toBe('10086');
+    expect(secret.appSecret).toBe('sek-xyz');
+    expect(secret.projectId).toBe('hw-proj');
   });
 
   it('re-running the same manifest UPDATES the credential keyed by (app_id, provider, platform)', async () => {
@@ -98,5 +107,64 @@ describe('importCredentials', () => {
     expect(audits[0].targetId).toBe(cred.id);
     expect(JSON.stringify(audits)).not.toContain('SA_SENTINEL');
     expect(res.created).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F3 regression: import → resolveCredential round-trip for Huawei
+// ---------------------------------------------------------------------------
+describe('Huawei import → resolveCredential (F3)', () => {
+  it('imported Huawei credential is ready===true, secret round-trips as object, and v2 URL is selected when project id given', async () => {
+    // Import a Huawei credential with a project id (v2 scenario).
+    const csv = 'company,app,provider,platform,label,app_id,app_secret,huawei_project_id\n'
+      + 'CorpX,PushApp,huawei,huawei,Huawei prod,88888,secret-abc,proj-v2\n';
+    const res = await importCredentials({ userId, manifestCsv: csv, files: {} });
+    expect(res).toMatchObject({ created: 1, failed: 0 });
+
+    // Locate the app that was created by the import.
+    const [company] = await db.select().from(companies).where(eq(companies.name, 'CorpX'));
+    const [app] = await db.select().from(apps).where(and(eq(apps.companyId, company.id), eq(apps.name, 'PushApp')));
+
+    // resolveCredential must return ready: true (not NOT_READY) because push_kit_enabled is set.
+    const resolved = await resolveCredential(app.id, 'huawei', 'huawei');
+    expect(resolved.ready).toBe(true);
+    if (!resolved.ready) throw new Error('Expected ready credential');
+
+    const { credential } = resolved;
+
+    // Secret must be a parsed object with the HuaweiSecret shape.
+    const secret = credential.secret as { appId: string; appSecret: string; projectId?: string };
+    expect(secret.appId).toBe('88888');
+    expect(secret.appSecret).toBe('secret-abc');
+    expect(secret.projectId).toBe('proj-v2');
+
+    // meta.project_id (canonical key) must be present so the adapter selects the v2 send URL.
+    const meta = credential.meta as { app_id: string; project_id?: string; push_kit_enabled: boolean };
+    expect(meta.project_id).toBe('proj-v2');
+    expect(meta.push_kit_enabled).toBe(true);
+  });
+
+  it('imported Huawei credential without project id is ready===true and uses v1 (no project_id in meta)', async () => {
+    const csv = 'company,app,provider,platform,label,app_id,app_secret,huawei_project_id\n'
+      + 'CorpY,PushApp2,huawei,huawei,Huawei v1,77777,secret-v1,\n';
+    const res = await importCredentials({ userId, manifestCsv: csv, files: {} });
+    expect(res).toMatchObject({ created: 1, failed: 0 });
+
+    const [company] = await db.select().from(companies).where(eq(companies.name, 'CorpY'));
+    const [app] = await db.select().from(apps).where(and(eq(apps.companyId, company.id), eq(apps.name, 'PushApp2')));
+
+    const resolved = await resolveCredential(app.id, 'huawei', 'huawei');
+    expect(resolved.ready).toBe(true);
+    if (!resolved.ready) throw new Error('Expected ready credential');
+
+    const secret = resolved.credential.secret as { appId: string; appSecret: string; projectId?: string };
+    expect(secret.appId).toBe('77777');
+    expect(secret.appSecret).toBe('secret-v1');
+    expect(secret.projectId).toBeUndefined(); // no projectId in v1 case
+
+    // meta must NOT have project_id so the adapter falls back to v1 URL
+    const meta = resolved.credential.meta as { app_id: string; project_id?: string; push_kit_enabled: boolean };
+    expect(meta.project_id).toBeUndefined();
+    expect(meta.push_kit_enabled).toBe(true);
   });
 });

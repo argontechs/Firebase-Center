@@ -111,9 +111,23 @@ function planRow(
 
   // provider === 'huawei'
   if (!row.appId || !row.appSecret) return { error: 'HUAWEI_FIELDS_MISSING' };
-  const meta: Record<string, unknown> = { app_id: row.appId };
-  if (row.huaweiProjectId) meta.huawei_project_id = row.huaweiProjectId;
-  return { secret: row.appSecret, provider, platform, meta };
+  const { appId, appSecret } = row;
+  const projectId = row.huaweiProjectId ?? undefined;
+  // Secret must be a JSON object so resolve.ts can JSON.parse it and the adapter can read
+  // secret.appId / secret.appSecret (HuaweiSecret shape).
+  const secret = JSON.stringify({
+    appId,
+    appSecret,
+    ...(projectId ? { projectId } : {}),
+  });
+  // meta.project_id (canonical key, matching FCM branch) drives v2 URL selection in the adapter.
+  // push_kit_enabled: true satisfies isReady() so the credential is immediately usable.
+  const meta: Record<string, unknown> = {
+    app_id: appId,
+    push_kit_enabled: true,
+    ...(projectId ? { project_id: projectId } : {}),
+  };
+  return { secret, provider, platform, meta };
 }
 
 // Atomic upsert: INSERT … ON CONFLICT (name) DO NOTHING … RETURNING handles concurrent
