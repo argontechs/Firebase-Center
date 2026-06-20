@@ -5,6 +5,7 @@ import { decryptSecret } from '~/server/utils/crypto';
 import { saveCredential } from '~/server/utils/credentials/save';
 import { rotateCredential } from '~/server/utils/credentials/rotate';
 import { listCredentials } from '~/server/utils/credentials/list';
+import { resetDb } from '~/server/test/db';
 import { eq } from 'drizzle-orm';
 
 // Ensure the master key is set for local/CI non-Docker runs.
@@ -15,12 +16,7 @@ const SENTINEL = 'PRIVATE_KEY_SENTINEL_DO_NOT_LEAK';
 const saJson = JSON.stringify({ project_id: 'proj-9', client_email: 'x@y.iam', private_key: SENTINEL });
 
 beforeEach(async () => {
-  await db.delete(auditLog);
-  await db.delete(appCredentials);
-  await db.delete(apps);
-  await db.delete(companies);
-  await db.delete(sessions);
-  await db.delete(users);
+  await resetDb();
   const [u] = await db.insert(users).values({ email: 'op@x.io', passwordHash: 'h' }).returning();
   userId = u.id;
   const [c] = await db.insert(companies).values({ name: 'Acme' }).returning();

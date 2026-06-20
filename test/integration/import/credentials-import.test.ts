@@ -3,6 +3,7 @@ import { db } from '~~/server/db/client';
 import { appCredentials, apps, companies, users, auditLog } from '~~/server/db/schema';
 import { decryptSecret } from '~~/server/utils/crypto';
 import { parseCredentialManifest, importCredentials } from '~~/server/utils/import/credentials';
+import { resetDb } from '~~/server/test/db';
 import { and, eq } from 'drizzle-orm';
 
 // Ensure the master key is set for local/CI non-Docker runs.
@@ -12,11 +13,7 @@ let userId = '';
 const SA = JSON.stringify({ project_id: 'proj-1', client_email: 'x@y.iam', private_key: '-----BEGIN-----SA_SENTINEL-----END-----' });
 
 beforeEach(async () => {
-  await db.delete(auditLog); await db.delete(appCredentials);
-  await db.delete(apps); await db.delete(companies);
-  const { sessions } = await import('~~/server/db/schema');
-  await db.delete(sessions);
-  await db.delete(users);
+  await resetDb();
   const [u] = await db.insert(users).values({ email: 'op@x.io', passwordHash: 'h' }).returning();
   userId = u.id;
 });

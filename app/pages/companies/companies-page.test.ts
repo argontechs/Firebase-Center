@@ -54,7 +54,7 @@ beforeEach(() => {
 describe('companies page', () => {
   it('renders the company plural label as the page heading', async () => {
     const wrapper = await mountPage();
-    expect(wrapper.find('[data-test="page-title"]').text()).toBe('Companies');
+    expect(wrapper.find('[data-test="page-title"]').text()).toBe('Sites');
   });
 
   it('lists fetched companies', async () => {
@@ -64,6 +64,6 @@ describe('companies page', () => {
 
   it('labels the create button with the company singular', async () => {
     const wrapper = await mountPage();
-    expect(wrapper.find('[data-test="create-btn"]').text()).toContain('Company');
+    expect(wrapper.find('[data-test="create-btn"]').text()).toContain('Site');
   });
 });

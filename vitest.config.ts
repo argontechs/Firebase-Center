@@ -2,11 +2,23 @@ import { defineConfig } from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
 export default defineConfig({
   plugins: [vue()],
-  test: { environment: 'node', include: ['test/**/*.test.ts', 'server/**/*.test.ts', 'app/**/*.test.ts'], globals: false, hookTimeout: 30000 },
+  test: {
+    environment: 'node',
+    include: ['test/**/*.test.ts', 'server/**/*.test.ts', 'app/**/*.test.ts'],
+    globals: false,
+    hookTimeout: 30000,
+    setupFiles: ['./test/setup-env.ts'],
+    // Integration tests share one throwaway Postgres and TRUNCATE between runs; running
+    // test files concurrently causes cross-file FK/deadlock races. Run files serially.
+    fileParallelism: false,
+  },
   resolve: {
     alias: {
       // Nuxt rootDir aliases (~~/@@). Server-to-server imports use ~~/server/* so they resolve
       // to the project root in BOTH Vitest and the Nitro production build (where ~ = app/ srcDir).
+      // Client composables live under app/ (Nuxt srcDir), where ~ = app/. Server-side ~ = root
+      // (legacy test imports use ~/server/*). Map the client app dir explicitly first.
+      '~/composables': new URL('./app/composables/', import.meta.url).pathname,
       '~~': new URL('./', import.meta.url).pathname,
       '@@': new URL('./', import.meta.url).pathname,
       '~': new URL('./', import.meta.url).pathname,
