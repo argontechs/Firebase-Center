@@ -46,6 +46,42 @@ function chunk<T>(arr: T[], size: number): T[][] {
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
+ * Extracts the list of illegal tokens from a Huawei partial-success (80100000) response.
+ *
+ * The real Huawei Push Kit API does NOT return illegal_tokens as a top-level array.
+ * Instead it encodes them inside the `msg` field as a JSON string, e.g.:
+ *   { code: '80100000', msg: '{"illegal_tokens":["t1","t2"]}', requestId: '...' }
+ *
+ * To remain forward-compatible with any future API revision that promotes the field
+ * to the top level, we prefer a top-level string[] when present, and fall back to
+ * parsing body.msg otherwise.
+ */
+function extractIllegalTokens(body: { illegal_tokens?: string[]; msg?: string }): Set<string> {
+  // Forward-compat: prefer a top-level array if the API ever promotes the field.
+  if (Array.isArray(body.illegal_tokens) && body.illegal_tokens.every((t) => typeof t === 'string')) {
+    return new Set(body.illegal_tokens);
+  }
+  // Real Huawei API: tokens are nested inside msg as a JSON-encoded string.
+  if (typeof body.msg === 'string') {
+    try {
+      const parsed = JSON.parse(body.msg) as unknown;
+      if (
+        parsed !== null &&
+        typeof parsed === 'object' &&
+        'illegal_tokens' in parsed &&
+        Array.isArray((parsed as Record<string, unknown>).illegal_tokens)
+      ) {
+        const arr = (parsed as Record<string, unknown>).illegal_tokens as unknown[];
+        return new Set(arr.filter((t): t is string => typeof t === 'string'));
+      }
+    } catch {
+      // Unparseable msg — no illegal tokens to extract.
+    }
+  }
+  return new Set<string>();
+}
+
+/**
  * Maps a Huawei body-level response code to a per-token outcome.
  *
  * HTTP 200 does NOT mean success — the real result is always in body.code.
@@ -235,6 +271,7 @@ export const huaweiAdapter: PushProvider = {
       });
       const body = (await resp.json()) as {
         code: string;
+        msg?: string;
         requestId?: string;
         illegal_tokens?: string[];
       };
@@ -246,7 +283,7 @@ export const huaweiAdapter: PushProvider = {
           results.push({ token: r.token, deviceId: r.deviceId, status: 'sent', responseMeta: meta });
         }
       } else if (mapped === 'partial') {
-        const bad = new Set(body.illegal_tokens ?? []);
+        const bad = extractIllegalTokens(body);
         for (const r of group) {
           results.push(
             bad.has(r.token)

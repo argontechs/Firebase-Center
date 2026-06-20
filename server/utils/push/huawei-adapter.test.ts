@@ -150,11 +150,15 @@ describe('huaweiAdapter.send', () => {
     ]);
   });
 
-  it('prunes illegal_tokens on partial success 80100000', async () => {
+  it('prunes illegal_tokens on partial success 80100000 (tokens nested in msg as JSON string)', async () => {
+    // The real Huawei Push Kit API encodes the rejected token list *inside* the msg
+    // field as a JSON string — NOT as a top-level array. This test uses the wire
+    // shape that the real API sends, so it will FAIL if the adapter reads
+    // body.illegal_tokens directly instead of parsing body.msg.
     fetchMock.mockReturnValueOnce(jsonResponse({
-      code: '80100000', msg: 'partial', requestId: 'r1',
-      // Huawei returns illegal_tokens as a JSON string in msg; adapter parses the listed tokens
-      illegal_tokens: ['t2'],
+      code: '80100000',
+      msg: JSON.stringify({ illegal_tokens: ['t2'] }),
+      requestId: 'r1',
     }));
     const out = await huaweiAdapter.send(fcred(), huaweiAdapter.render(msg()), recips);
     expect(out[0]).toMatchObject({ token: 't1', status: 'sent' });
