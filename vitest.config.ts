@@ -8,6 +8,9 @@ export default defineConfig({
     globals: false,
     hookTimeout: 30000,
     setupFiles: ['./test/setup-env.ts'],
+    // Apply migrations to the test DB once before the suite so a freshly-added
+    // migration never leaves DB-integration tests failing on a stale schema.
+    globalSetup: ['./test/global-setup.ts'],
     // Integration tests share one throwaway Postgres and TRUNCATE between runs; running
     // test files concurrently causes cross-file FK/deadlock races. Run files serially.
     fileParallelism: false,
