@@ -11,6 +11,9 @@ const PUBLIC_EXACT = new Set(['/api/auth/login', '/api/auth/csrf', '/healthz']);
 // The middleware enforces that at least a Bearer token is present; the route handler
 // is solely responsible for validating the token value.
 const APP_INGEST_DEVICE = /^\/api\/apps\/[^/]+\/devices$/;
+// SA.3: programmatic send API — bearer send-key auth, fully exempt from session + CSRF.
+// Only the /api/v1/ prefix is exempted; operator routes are NOT affected.
+const SEND_API_PREFIX = '/api/v1/';
 // forced first-login change: session + current-password protected, no CSRF token yet (design §11)
 const CSRF_EXEMPT_EXACT = new Set(['/api/auth/change-password']);
 // mustChangePassword blocks all state-changing requests except the escape hatch
@@ -23,6 +26,10 @@ export default defineEventHandler(async (event) => {
 
   if (!path.startsWith('/api/') && path !== '/healthz') return;        // SSR/asset routes
   if (PUBLIC_EXACT.has(path)) return;
+
+  // SA.3: /api/v1/ routes use bearer send-key auth handled entirely in the route handler.
+  // No session or CSRF is required or enforced here.
+  if (path.startsWith(SEND_API_PREFIX)) return;
 
   // bearer-key app-ingest path: require Authorization: Bearer header as defense-in-depth;
   // the route handler validates the token value itself.

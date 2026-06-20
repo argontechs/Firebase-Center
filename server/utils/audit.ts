@@ -7,7 +7,8 @@ export type AuditAction =
   | 'ingest_key_issue' | 'ingest_key_revoke'
   | 'send_key_issue' | 'send_key_rotate' | 'send_key_revoke'
   | 'credential_save' | 'credential_rotate'
-  | 'campaign_send' | 'import_run';
+  | 'campaign_send' | 'import_run'
+  | 'api_send';
 
 export async function audit(input: {
   userId: string | null;

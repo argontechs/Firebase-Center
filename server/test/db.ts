@@ -69,6 +69,8 @@ export async function makeTestApp() {
     { default: sendKeysGet },
     { default: sendKeyRevokePost },
     { default: sendKeyRotatePost },
+    // SA.3: programmatic send API
+    { default: v1MessagesPost },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -112,6 +114,8 @@ export async function makeTestApp() {
     import('~~/server/api/companies/[id]/send-keys/index.get'),
     import('~~/server/api/companies/[id]/send-keys/[kid]/revoke.post'),
     import('~~/server/api/companies/[id]/send-keys/[kid]/rotate.post'),
+    // SA.3: programmatic send API
+    import('~~/server/api/v1/messages.post'),
   ]);
 
   const app = createApp();
@@ -159,6 +163,8 @@ export async function makeTestApp() {
   router.get('/api/companies/:id/send-keys', eventHandler(sendKeysGet));
   router.post('/api/companies/:id/send-keys/:kid/revoke', eventHandler(sendKeyRevokePost));
   router.post('/api/companies/:id/send-keys/:kid/rotate', eventHandler(sendKeyRotatePost));
+  // SA.3: programmatic send API
+  router.post('/api/v1/messages', eventHandler(v1MessagesPost));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
