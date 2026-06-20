@@ -234,10 +234,10 @@ export async function runWorkerOnce(): Promise<boolean> {
     // Retryable path: check if we've exhausted attempts.
     const nextAttempts = job.attempts + 1;
 
-    // Reserved Retry-After hook: no adapter populates responseMeta.retryAfterMs today
-    // (the M5 FcmAdapter does not yet read the HTTP Retry-After header), so this is
-    // effectively `undefined` and nextRunAfter falls back to pure exponential backoff.
-    // Wire the adapter to set responseMeta.retryAfterMs to honor Retry-After end-to-end.
+    // Retry-After propagation: fcmAdapter now reads the HTTP Retry-After header from the
+    // firebase-admin@14 plain-object httpResponse.headers and surfaces it as
+    // responseMeta.retryAfterMs.  When present, nextRunAfter uses it as a lower bound
+    // so the worker respects the server-mandated back-off instead of pure exponential.
     const retryAfterMs = retryable[0].responseMeta?.retryAfterMs as number | undefined;
 
     if (nextAttempts >= job.maxAttempts) {

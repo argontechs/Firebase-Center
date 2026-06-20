@@ -90,13 +90,28 @@ function mapFcmError(code: string): { status: 'failed' | 'invalid'; disposition:
 // Extract a Retry-After (seconds or HTTP-date) from a firebase-admin error's
 // httpResponse headers. Returns epoch-delta milliseconds, or undefined when
 // absent / unparseable.
+//
+// firebase-admin@14 exposes httpResponse.headers as a PLAIN OBJECT, not a
+// Headers/fetch instance, so .get() is absent.  We read the key as a plain
+// property first (checking both lowercase and title-case spellings), and only
+// fall back to the .get() accessor when it is available (e.g. in test doubles
+// or future SDK versions that switch to a fetch-compatible Headers object).
 function retryAfterMsFromError(error: unknown): number | undefined {
   const headers = (
     error as {
-      httpResponse?: { headers?: { get?(k: string): string | null } };
+      httpResponse?: {
+        headers?: Record<string, string> & { get?(k: string): string | null };
+      };
     }
   )?.httpResponse?.headers;
-  const raw = headers?.get?.('retry-after');
+  if (!headers) return undefined;
+  // Plain-object lookup (firebase-admin@14 actual shape).
+  const raw: string | null | undefined =
+    headers['retry-after'] ??
+    headers['Retry-After'] ??
+    // Fall back to the .get() accessor when the object provides one
+    // (fetch-compatible Headers, test doubles, future SDK versions).
+    (typeof headers.get === 'function' ? headers.get('retry-after') : undefined);
   if (!raw) return undefined;
   const asSeconds = Number(raw);
   if (Number.isFinite(asSeconds)) return Math.max(0, Math.round(asSeconds * 1000));

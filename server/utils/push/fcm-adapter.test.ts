@@ -52,11 +52,15 @@ describe('fcmAdapter.render', () => {
   });
 });
 
-// FCM error shaped like firebase-admin's FirebaseMessagingError: code + optional httpResponse headers.
+// FCM error shaped like firebase-admin@14's FirebaseMessagingError: code + optional httpResponse.
+// firebase-admin@14 exposes httpResponse.headers as a PLAIN OBJECT (no .get method), so we
+// use that shape here.  Tests that rely on retryAfterMs would FAIL on the old code (which
+// only called headers.get()) and PASS on the fixed code (which reads the plain property first).
 function fcmErr(code: string, headers?: Record<string, string>) {
   const error: any = Object.assign(new Error(code), { code });
   if (headers) {
-    error.httpResponse = { headers: { get: (k: string) => headers[k.toLowerCase()] ?? null } };
+    // Plain object — mirrors what firebase-admin@14 actually puts on httpResponse.headers.
+    error.httpResponse = { headers };
   }
   return { success: false, error };
 }
