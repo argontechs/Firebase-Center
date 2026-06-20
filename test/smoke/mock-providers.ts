@@ -54,8 +54,11 @@ export async function startMockProviders() {
     });
   });
 
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>((r) => server.listen(0, '0.0.0.0', r));
   const port = (server.address() as { port: number }).port;
+  // Bind to 0.0.0.0 so the mock is reachable from inside Docker containers.
+  // The Vitest harness passes host.docker.internal:<port> to the compose stack
+  // so the containerised app can reach back to this host-side mock.
   const base = `http://127.0.0.1:${port}`;
 
   return {

@@ -121,6 +121,12 @@ These require a running stack (`docker compose up -d`) and a browser.
 - [ ] **Backup → restore round-trip:** run `scripts/backup.sh` then
       `scripts/restore.sh <dump>` on a throwaway DB; credentials decrypt only
       with the original `NUXT_BO_MASTER_KEY` (see `docs/RESTORE.md`).
+      > **FOOTGUN — `BO_MASTER_KEY` must be backed up out-of-band, stored
+      > separately from the DB volume.  A dump without the matching
+      > `NUXT_BO_MASTER_KEY` is useless — all credential secrets are
+      > AES-encrypted with it and cannot be recovered from the dump alone.
+      > Always store the key in a secrets manager or offline store that is
+      > independent of the database backup path.**
 
 ---
 

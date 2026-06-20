@@ -190,6 +190,7 @@ for i in $(seq 1 30); do
   fi
   sleep 2
 done
+[ "${SENT}" = "2" ] || { echo "[smoke] ERROR: timed out waiting for sent=2 (got sent=${SENT} failed=${FAILED})" >&2; exit 1; }
 echo "SEND_OK sent=${SENT} failed=${FAILED}"
 
 # ---------------------------------------------------------------------------

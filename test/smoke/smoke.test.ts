@@ -39,15 +39,24 @@ describe.skipIf(!RUN_SMOKE)('smoke: full end-to-end flow against mocked provider
   it('runs the full smoke flow against mocked providers and a fresh DB', () => {
     const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
 
+    // The mock server binds to 0.0.0.0 so it is reachable from inside Docker
+    // containers, but mock.fcmUrl / mock.huaweiUrl / mock.oauthUrl contain
+    // 127.0.0.1 (the host loopback) which is unreachable inside a container.
+    // Rewrite the host part to host.docker.internal so the containerised app
+    // reaches the host-side mock.  The docker-compose.smoke.yml extra_hosts
+    // entry resolves host.docker.internal to the host gateway on Linux.
+    const toDockerHostUrl = (url: string) =>
+      url.replace('127.0.0.1', 'host.docker.internal');
+
     const out = execFileSync('bash', ['scripts/smoke.sh'], {
       cwd: projectRoot,
       env: {
         ...process.env,
         BACKUP_DIR: backupDir,
-        FCM_BASE_URL: mock.fcmUrl,
-        FCM_OAUTH_URL: mock.oauthUrl,
-        HUAWEI_BASE_URL: mock.huaweiUrl,
-        HUAWEI_OAUTH_URL: mock.oauthUrl,
+        FCM_BASE_URL: toDockerHostUrl(mock.fcmUrl),
+        FCM_OAUTH_URL: toDockerHostUrl(mock.oauthUrl),
+        HUAWEI_BASE_URL: toDockerHostUrl(mock.huaweiUrl),
+        HUAWEI_OAUTH_URL: toDockerHostUrl(mock.oauthUrl),
       },
       encoding: 'utf8',
       // 10-minute timeout: Docker build + bring-up + full flow
