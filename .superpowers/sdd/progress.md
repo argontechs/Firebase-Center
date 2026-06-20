@@ -42,3 +42,7 @@
 - M6 UI next (M6.6–M6.9). M6.6 must extract a reusable createCampaign() helper for send-API SA.3. Then send-API (SA.1–SA.4, spec at docs/superpowers/specs/2026-06-20-send-api-tasks.md), then M7, then final review.
 - M6 COMPLETE (M6.1–M6.9: send pipeline + compose/history UI + e2e). Build gate PASS. Auto-fixed M6.6/M6.7/M6.8 (preview byte count, body validation, app-scoped delivery query, NULLS LAST, etc.). Count: 60/72. 7/8 milestones (M0–M6).
 - Send-API next (SA.1–SA.4, spec docs/superpowers/specs/2026-06-20-send-api-tasks.md). SA.3 extract+reuse campaign creation from server/api/campaigns/index.post.ts. Then M7, then final review.
+- SEND-API COMPLETE (SA.1–SA.4: site_send_keys + util, mgmt routes, POST /api/v1/messages [security-approved], UI). Build gate PASS. Salvaged SA.3 after a session-limit interruption. Count: 64/72.
+- FINAL-REVIEW TODO (from SA.3 minors): 429 Retry-After header; pre-auth per-IP throttle; document/gate X-Forwarded-For trust; per-IP rate-limit test; extract createCampaign() DRY helper.
+- M7 next (M7.1–M7.4 now; M7.5 after test-hardening). M7.3 audit coverage must include send_key_issue/rotate/revoke + api_send.
+- TEST-HARDENING (before M7.5 + final review): label component tests (Companies->Sites), parallel-DB-contention (run integration tests serially/isolated), M1.14/M2.6/M4.0/M4.9, duplicate type-import warnings.
