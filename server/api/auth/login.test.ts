@@ -22,8 +22,13 @@ vi.mock('h3', () => ({
 import loginHandler from './login.post';
 import meHandler from './me.get';
 
-function evt(opts: { body?: any; headers?: Record<string,string>; cookies?: Record<string,string> } = {}) {
-  return { _body: opts.body, _headers: opts.headers ?? { 'x-forwarded-for': '1.1.1.1' }, _cookies: opts.cookies ?? {} } as any;
+function evt(opts: { body?: any; headers?: Record<string,string>; cookies?: Record<string,string>; socketIp?: string } = {}) {
+  return {
+    _body: opts.body,
+    _headers: opts.headers ?? { 'x-forwarded-for': '1.1.1.1' },
+    _cookies: opts.cookies ?? {},
+    node: { req: { socket: { remoteAddress: opts.socketIp ?? '127.0.0.1' } } },
+  } as any;
 }
 
 beforeEach(async () => { await truncate('sessions', 'audit_log', 'users'); resetRateLimitStore(); });
@@ -60,6 +65,34 @@ describe('POST /api/auth/login', () => {
     }
     await expect(loginHandler(evt({ body: { email: 'admin@bo.com', password: 'Str0ng-Passw0rd!' } })))
       .rejects.toMatchObject({ statusCode: 429 });
+  });
+
+  it('spoofed X-Forwarded-For does not bypass per-IP lockout (F8)', async () => {
+    // All requests share the same socket.remoteAddress (same physical connection).
+    // An attacker varies the X-Forwarded-For header on each request trying to get
+    // a fresh IP bucket.  With NUXT_TRUST_PROXY unset (default = off), the XFF
+    // header must be IGNORED and the socket IP must be used instead, so all
+    // requests count toward the SAME IP bucket and lockout fires after MAX_FAILURES.
+    await seedAdmin();
+    delete process.env.NUXT_TRUST_PROXY;
+    const sharedSocketIp = '10.20.30.40';
+    for (let i = 0; i < 5; i++) {
+      // Each attempt spoofs a different XFF value — on old code this defeats lockout.
+      const e = evt({
+        body: { email: 'admin@bo.com', password: 'wrong' },
+        headers: { 'x-forwarded-for': `spoofed-${i}.example.com` },
+        socketIp: sharedSocketIp,
+      });
+      await loginHandler(e).catch(() => {});
+    }
+    // The 6th attempt (with yet another spoofed XFF) must still be locked out
+    // because the socket IP was used for all 5 failures.
+    const finalEvt = evt({
+      body: { email: 'admin@bo.com', password: 'Str0ng-Passw0rd!' },
+      headers: { 'x-forwarded-for': 'spoofed-99.example.com' },
+      socketIp: sharedSocketIp,
+    });
+    await expect(loginHandler(finalEvt)).rejects.toMatchObject({ statusCode: 429 });
   });
 });
 

@@ -16,7 +16,7 @@
  *  - audit 'api_send'
  */
 import { z } from 'zod';
-import { defineEventHandler, readBody, createError, getHeader, getRequestIP, setResponseStatus } from 'h3';
+import { defineEventHandler, readBody, createError, getHeader, setResponseStatus } from 'h3';
 import { eq } from 'drizzle-orm';
 import { db } from '~~/server/db/client';
 import { apps, campaigns } from '~~/server/db/schema';
@@ -26,6 +26,7 @@ import { validatePayloadSize, validateHuaweiClickAction, PayloadTooLargeError, C
 import { enqueueCampaign } from '~~/server/utils/queue/enqueue';
 import { audit } from '~~/server/utils/audit';
 import type { NeutralMessage } from '~~/server/utils/push/types';
+import { clientIp } from '~~/server/utils/http';
 
 const WINDOW_MS = 60_000;
 function sendLimit(): number {
@@ -67,7 +68,7 @@ export default defineEventHandler(async (event) => {
 
   // 3. Per-key + per-IP rate limiting
   const limit = sendLimit();
-  const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown';
+  const ip = clientIp(event);
   rateLimit(`send:key:${keyId}`, limit, WINDOW_MS);
   rateLimit(`send:ip:${ip}`, limit, WINDOW_MS);
 

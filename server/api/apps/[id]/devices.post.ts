@@ -1,4 +1,4 @@
-import { createError, getRequestIP, getRouterParam, readBody, setResponseStatus, defineEventHandler } from 'h3';
+import { createError, getRouterParam, readBody, setResponseStatus, defineEventHandler } from 'h3';
 import { and, eq } from 'drizzle-orm';
 import { db } from '~~/server/db/client';
 import { devices } from '~~/server/db/schema';
@@ -6,6 +6,7 @@ import { authenticateIngest } from '~~/server/utils/ingest-auth';
 import { validateRows } from '~~/server/utils/import/validate';
 import { upsertDevices } from '~~/server/utils/import/upsert';
 import { rateLimit } from '~~/server/utils/rate-limit';
+import { clientIp } from '~~/server/utils/http';
 
 // Per-key / per-IP sliding-window limit.
 // Read at request time (not module-load time) so that INGEST_RATE_LIMIT set
@@ -25,7 +26,7 @@ export default defineEventHandler(async (event) => {
   // Per-key sliding-window rate limit (limit read at request time so test env
   // overrides via INGEST_RATE_LIMIT take effect even with a cached module).
   const limit = ingestLimit();
-  const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown';
+  const ip = clientIp(event);
   rateLimit(`ingest:key:${ctx.keyId}`, limit, WINDOW_MS);
   rateLimit(`ingest:ip:${ip}`, limit, WINDOW_MS);
 
