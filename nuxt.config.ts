@@ -2,6 +2,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-01',
   future: { compatibilityVersion: 4 },
   ssr: true,
+  css: ['~/assets/css/main.css'],
   runtimeConfig: {
     // server-only secrets (never sent to the client)
     databaseUrl: '',          // NUXT_DATABASE_URL
