@@ -1,0 +1,41 @@
+# Compose override for smoke testing.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.smoke.yml up -d --build
+#
+# What this override does:
+#  1. Replaces the production db_data volume with a throwaway fc_smoke_data volume
+#     so the smoke run always starts from a clean slate and never touches the
+#     production data volume.
+#  2. Injects provider base-URL env vars into the app container so the
+#     HuaweiAdapter (and a future HTTP-level FCM adapter) call the in-test mock
+#     server instead of the real provider endpoints.
+#
+# The mock server runs on the host.  Containers reach it via the special
+# host.docker.internal DNS name (Docker Desktop on macOS/Windows) or via the
+# host-gateway extra_host entry on Linux (added below).
+#
+# Required env vars that the outer smoke script / CI job must supply:
+#   HUAWEI_BASE_URL   - e.g. http://host.docker.internal:<port>
+#   HUAWEI_OAUTH_URL  - e.g. http://host.docker.internal:<port>/token
+#   FCM_BASE_URL      - reserved for a future HTTP-level FCM mock
+#   FCM_OAUTH_URL     - reserved for a future HTTP-level FCM mock
+
+services:
+  db:
+    volumes:
+      - fc_smoke_data:/var/lib/postgresql/data
+
+  app:
+    extra_hosts:
+      # Linux containers: route host.docker.internal to the Docker host gateway
+      # so the app can reach the mock server running on the test host.
+      - "host.docker.internal:host-gateway"
+    environment:
+      FCM_BASE_URL: ${FCM_BASE_URL:-}
+      FCM_OAUTH_URL: ${FCM_OAUTH_URL:-}
+      HUAWEI_BASE_URL: ${HUAWEI_BASE_URL:-}
+      HUAWEI_OAUTH_URL: ${HUAWEI_OAUTH_URL:-}
+
+volumes:
+  fc_smoke_data:

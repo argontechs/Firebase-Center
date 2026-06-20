@@ -15,8 +15,11 @@ import { getAccessToken } from './token-cache';
 // Constants
 // ---------------------------------------------------------------------------
 
-const TOKEN_URL = 'https://oauth-login.cloud.huawei.com/oauth2/v3/token';
-const SEND_HOST = 'https://push-api.cloud.huawei.com';
+// Allow test/smoke overrides via env vars (HUAWEI_OAUTH_URL / HUAWEI_BASE_URL).
+// In production these are unset and fall back to the canonical Huawei endpoints.
+const TOKEN_URL =
+  process.env.HUAWEI_OAUTH_URL ?? 'https://oauth-login.cloud.huawei.com/oauth2/v3/token';
+const SEND_HOST = process.env.HUAWEI_BASE_URL ?? 'https://push-api.cloud.huawei.com';
 const CHUNK = 1000;
 const QPS_PACE_MS = 50; // self-imposed pacing between chunks (Huawei gives no Retry-After)
 
