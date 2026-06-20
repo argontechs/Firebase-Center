@@ -57,3 +57,9 @@
 - VERIFIED INDEPENDENTLY: full suite GREEN from empty DB (481 passed, 1 skipped smoke) via globalSetup auto-migrate; production build PASS; fresh-volume migration clean; only .env.example tracked.
 - System feature-complete: M0–M7 + send-API. ~ commits on main.
 - Optional follow-ups (non-blocking, Minor): deferred extra-coverage tasks M1.14/M2.6/M4.0/M4.9; send-API 429 Retry-After header + pre-auth throttle; createCampaign DRY; duplicate-type-import warnings.
+
+## UI POLISH + HANDOFF 2026-06-20
+- UI design pass applied (PRODUCT.md/DESIGN.md committed): warm-paper light theme, deep-teal accent, mono for keys, sidebar app-shell, clean tables/panels/badges. Build + full suite green (483 passing).
+- Bugs found & fixed during the screenshot tour: app.vue missing <NuxtLayout> (sidebar never rendered); root / 404 (added redirect to /companies); sidebar nav pointed at nonexistent /compose,/history (now Sites + Import credentials); app-detail [id].vue was a "Coming soon" placeholder shadowing the real per-app pages (wired tabs -> NuxtPage + default-tab redirect).
+- README.md written for handoff (clone-to-run, provider setup, APIs, deploy, backup, security).
+- Polished screenshot tour delivered (login, sites, apps, compose, devices, credentials).
