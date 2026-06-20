@@ -50,3 +50,10 @@
 - REMAINING: test-hardening (vitest serial + test DB env + label tests) -> M7.5 final verification -> final whole-branch review -> fix findings.
 - TEST-HARDENING + M7.5 DONE: full vitest suite GREEN (442 passed, 1 skipped smoke). Build gate PASS. Fresh-DB migration verified. Fixes: vitest fileParallelism:false + setup-env.ts; ~/composables alias; resetDb() in credentials-security/import; label tests -> Sites.
 - System is FEATURE-COMPLETE. Remaining: FINAL whole-branch review -> fix findings -> goal met. (Deferred extra-coverage tasks M1.14/M2.6/M4.0/M4.9 are non-blocking.)
+
+## GOAL MET 2026-06-20
+- FINAL WHOLE-BRANCH REVIEW complete (12 verified findings -> 9 must-fix: 2 Critical, 7 Important). ALL FIXED:
+  #1 leaked master key/session secret untracked + .gitignore; F2 Huawei illegal_tokens (nested in msg); F3 Huawei CSV-import shape; F4 FCM Retry-After (plain-object headers); F5 providerScope enforced; F6 campaign status lifecycle (jobs.campaignId migration); F7 rotateIngestKey revoked-guard; F8 XFF login-lockout (trusted-proxy); F9 unique/FK -> 409. Each masking test corrected.
+- VERIFIED INDEPENDENTLY: full suite GREEN from empty DB (481 passed, 1 skipped smoke) via globalSetup auto-migrate; production build PASS; fresh-volume migration clean; only .env.example tracked.
+- System feature-complete: M0–M7 + send-API. ~ commits on main.
+- Optional follow-ups (non-blocking, Minor): deferred extra-coverage tasks M1.14/M2.6/M4.0/M4.9; send-API 429 Retry-After header + pre-auth throttle; createCampaign DRY; duplicate-type-import warnings.
