@@ -12,3 +12,4 @@ dist
 # local scratch
 .playwright-mcp/
 firebase-center-login.png
+tour-*.png
