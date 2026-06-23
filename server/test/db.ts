@@ -76,6 +76,7 @@ export async function makeTestApp() {
     { default: audiencesPost },
     { default: audiencePatch },
     { default: audienceDelete },
+    { default: audiencesCountGet },
     // D1: operator device list
     { default: devicesListGet },
     // D2: manual add + tag edit + delete
@@ -136,6 +137,7 @@ export async function makeTestApp() {
     import('~~/server/api/apps/[id]/audiences/index.post'),
     import('~~/server/api/apps/[id]/audiences/[aid]/index.patch'),
     import('~~/server/api/apps/[id]/audiences/[aid]/index.delete'),
+    import('~~/server/api/apps/[id]/audiences/count.get'),
     // D1: operator device list
     import('~~/server/api/devices/index.get'),
     // D2: manual add + tag edit + delete
@@ -195,7 +197,8 @@ export async function makeTestApp() {
   router.post('/api/companies/:id/send-keys/:kid/rotate', eventHandler(sendKeyRotatePost));
   // SA.3: programmatic send API
   router.post('/api/v1/messages', eventHandler(v1MessagesPost));
-  // C1: audiences CRUD
+  // C1: audiences CRUD (count must be registered before :aid to avoid dynamic capture)
+  router.get('/api/apps/:id/audiences/count', eventHandler(audiencesCountGet));
   router.get('/api/apps/:id/audiences', eventHandler(audiencesGet));
   router.post('/api/apps/:id/audiences', eventHandler(audiencesPost));
   router.patch('/api/apps/:id/audiences/:aid', eventHandler(audiencePatch));

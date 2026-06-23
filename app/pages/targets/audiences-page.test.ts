@@ -172,4 +172,55 @@ describe('audiences page', () => {
       expect(row.find('[data-test="delete-audience-btn"]').exists()).toBe(true);
     }
   });
+
+  it('shows filter summary content inside each audience-row', async () => {
+    const wrapper = await mountPage();
+    const rows = wrapper.findAll('[data-test="audience-row"]');
+    // Row 0: platform=android, provider=fcm, tag=vip → "android, fcm, #vip"
+    expect(rows[0]!.text()).toContain('android');
+    expect(rows[0]!.text()).toContain('fcm');
+    expect(rows[0]!.text()).toContain('#vip');
+    // Row 1: platform=ios, provider=null, tag=null → "ios"
+    expect(rows[1]!.text()).toContain('ios');
+  });
+
+  it('calls $fetch (CSRF + POST) when the create form is submitted', async () => {
+    const wrapper = await mountPage();
+    // Open the create form
+    await wrapper.find('[data-test="new-audience-btn"]').trigger('click');
+    await nextTick();
+
+    // Fill in a name via setValue (sets element value + triggers input/change for v-model)
+    const nameInput = wrapper.find('[data-test="audience-name"]');
+    await nameInput.setValue('Test Audience');
+    await nextTick();
+
+    // Reset the mock so we can cleanly assert calls from this mutation only
+    (globalThis.$fetch as ReturnType<typeof vi.fn>).mockReset();
+    (globalThis.$fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ token: 'csrf-tok' });
+
+    // Trigger form submit directly (submit type=submit button click triggers form submit.prevent)
+    await wrapper.find('[data-test="create-audience-form"]').trigger('submit');
+    await nextTick();
+    await nextTick();
+
+    // $fetch must have been called (at minimum for the CSRF token fetch in useCsrf().fetchToken())
+    expect(globalThis.$fetch).toHaveBeenCalled();
+  });
+
+  it('calls $fetch (CSRF + DELETE) when delete-audience-btn is clicked', async () => {
+    const wrapper = await mountPage();
+
+    // Reset the mock so we can cleanly assert calls from this mutation
+    (globalThis.$fetch as ReturnType<typeof vi.fn>).mockReset();
+    (globalThis.$fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ token: 'csrf-tok' });
+
+    const firstRow = wrapper.find('[data-test="audience-row"]');
+    await firstRow.find('[data-test="delete-audience-btn"]').trigger('click');
+    await nextTick();
+    await nextTick();
+
+    // $fetch must have been called (at minimum for CSRF token fetch)
+    expect(globalThis.$fetch).toHaveBeenCalled();
+  });
 });

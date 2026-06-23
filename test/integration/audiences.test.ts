@@ -44,6 +44,55 @@ beforeEach(async () => {
 afterAll(async () => { await closeDb(); });
 
 // ---------------------------------------------------------------------------
+// GET /api/apps/:id/audiences/count
+// ---------------------------------------------------------------------------
+describe('GET /api/apps/:id/audiences/count', () => {
+  beforeEach(async () => {
+    // Seed devices: android+fcm+vip, ios+fcm, huawei+huawei+vip, android+fcm (no tag)
+    await db.insert(devices).values([
+      { appId, provider: 'fcm',    platform: 'android', token: 'cnt-tok1', tags: ['vip'] },
+      { appId, provider: 'fcm',    platform: 'ios',     token: 'cnt-tok2', tags: []      },
+      { appId, provider: 'huawei', platform: 'huawei',  token: 'cnt-tok3', tags: ['vip'] },
+      { appId, provider: 'fcm',    platform: 'android', token: 'cnt-tok4', tags: []      },
+    ]);
+  });
+
+  it('returns count of all active devices for the app when no filter is given', async () => {
+    const res = await fetch(`/api/apps/${appId}/audiences/count`);
+    expect(res.count).toBe(4);
+  });
+
+  it('filters by platform', async () => {
+    const res = await fetch(`/api/apps/${appId}/audiences/count?platform=android`);
+    expect(res.count).toBe(2);
+  });
+
+  it('filters by provider', async () => {
+    const res = await fetch(`/api/apps/${appId}/audiences/count?provider=huawei`);
+    expect(res.count).toBe(1);
+  });
+
+  it('filters by tag', async () => {
+    const res = await fetch(`/api/apps/${appId}/audiences/count?tag=vip`);
+    expect(res.count).toBe(2);
+  });
+
+  it('filters by combined platform + tag', async () => {
+    const res = await fetch(`/api/apps/${appId}/audiences/count?platform=android&tag=vip`);
+    expect(res.count).toBe(1);
+  });
+
+  it('returns 0 for a different app (tenant isolation)', async () => {
+    const res = await fetch(`/api/apps/${appBId}/audiences/count`);
+    expect(res.count).toBe(0);
+  });
+
+  it('returns 401 without a session', async () => {
+    await expect(testApp.$fetch(`/api/apps/${appId}/audiences/count`)).rejects.toMatchObject({ statusCode: 401 });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/apps/:id/audiences
 // ---------------------------------------------------------------------------
 describe('POST /api/apps/:id/audiences', () => {
