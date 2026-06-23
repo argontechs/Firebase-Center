@@ -71,6 +71,11 @@ export async function makeTestApp() {
     { default: sendKeyRotatePost },
     // SA.3: programmatic send API
     { default: v1MessagesPost },
+    // C1: audiences CRUD
+    { default: audiencesGet },
+    { default: audiencesPost },
+    { default: audiencePatch },
+    { default: audienceDelete },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -116,6 +121,11 @@ export async function makeTestApp() {
     import('~~/server/api/companies/[id]/send-keys/[kid]/rotate.post'),
     // SA.3: programmatic send API
     import('~~/server/api/v1/messages.post'),
+    // C1: audiences CRUD
+    import('~~/server/api/apps/[id]/audiences/index.get'),
+    import('~~/server/api/apps/[id]/audiences/index.post'),
+    import('~~/server/api/apps/[id]/audiences/[aid]/index.patch'),
+    import('~~/server/api/apps/[id]/audiences/[aid]/index.delete'),
   ]);
 
   const app = createApp();
@@ -165,6 +175,11 @@ export async function makeTestApp() {
   router.post('/api/companies/:id/send-keys/:kid/rotate', eventHandler(sendKeyRotatePost));
   // SA.3: programmatic send API
   router.post('/api/v1/messages', eventHandler(v1MessagesPost));
+  // C1: audiences CRUD
+  router.get('/api/apps/:id/audiences', eventHandler(audiencesGet));
+  router.post('/api/apps/:id/audiences', eventHandler(audiencesPost));
+  router.patch('/api/apps/:id/audiences/:aid', eventHandler(audiencePatch));
+  router.delete('/api/apps/:id/audiences/:aid', eventHandler(audienceDelete));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
