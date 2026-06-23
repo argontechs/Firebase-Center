@@ -69,3 +69,8 @@
 - B1 shared audience resolver (7e105d4e). B2 segment branch in enqueue+preview (f6ff226a).
 - C1 audiences CRUD + live counts (40351aa2). D1 GET /api/devices (3bc25cff). D2 manual add+tag edit+delete (efabdd72..f7de9a6b; fixed delete tenant scope). D3 import tags column (b5321d33).
 - GATE: build PASS, suite GREEN — 544 passed, 1 skipped. Minor findings (dead imports, filterOf dup x3, mislabeled audience test, missing previewAudience segment+scope test) → final review.
+
+## PUSH SEND & TARGETS — Phase 2 (send/schedule API) complete 2026-06-23
+- E1 segment sends + scheduledAt on POST /api/campaigns (e94bee02; fixed: test now asserts non-match exclusion). E2 broadcast + createCampaign extract (5f7bf2f1). E3 cancel scheduled (cb3471f6). F1 due-campaign sweep timer (f802aa6e).
+- GATE: build PASS, suite GREEN — 562 passed, 1 skipped. Gate also fixed pre-existing FK-ordering bug in credentials-save.test.ts teardown.
+- Minor findings → final review: cancel.post.ts SELECT-then-UPDATE (non-atomic, operator-driven, low risk); due.ts enqueue+status non-txn (idempotent); broadcast audit not asserted in test; dead imports in cancel/audience tests.
