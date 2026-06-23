@@ -7,7 +7,7 @@ export type AuditAction =
   | 'ingest_key_issue' | 'ingest_key_revoke'
   | 'send_key_issue' | 'send_key_rotate' | 'send_key_revoke'
   | 'credential_save' | 'credential_rotate'
-  | 'campaign_send' | 'campaign_scheduled' | 'campaign_broadcast' | 'import_run'
+  | 'campaign_send' | 'campaign_scheduled' | 'campaign_broadcast' | 'campaign_cancel' | 'import_run'
   | 'api_send'
   | 'audience_save' | 'audience_delete'
   | 'device_add_manual' | 'device_edit_tags' | 'device_delete';

@@ -84,6 +84,8 @@ export async function makeTestApp() {
     { default: deviceDelete },
     // E2: broadcast
     { default: campaignBroadcastPost },
+    // E3: cancel scheduled campaign
+    { default: campaignCancelPost },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -142,6 +144,8 @@ export async function makeTestApp() {
     import('~~/server/api/devices/[id]/index.delete'),
     // E2: broadcast
     import('~~/server/api/campaigns/broadcast.post'),
+    // E3: cancel scheduled campaign
+    import('~~/server/api/campaigns/[id]/cancel.post'),
   ]);
 
   const app = createApp();
@@ -204,6 +208,8 @@ export async function makeTestApp() {
   router.delete('/api/devices/:id', eventHandler(deviceDelete));
   // E2: broadcast
   router.post('/api/campaigns/broadcast', eventHandler(campaignBroadcastPost));
+  // E3: cancel scheduled campaign
+  router.post('/api/campaigns/:id/cancel', eventHandler(campaignCancelPost));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
