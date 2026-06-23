@@ -145,4 +145,50 @@ describe('enqueueCampaign', () => {
     expect(providers).toContain('fcm');
     expect(providers).toContain('huawei');
   });
+
+  it('segment: enqueues jobs only for devices matching the filter tag', async () => {
+    const { app } = await makeApp();
+    // vip devices
+    const d1 = await makeDevice(app.id, { provider: 'fcm', platform: 'android', tags: ['vip'] });
+    const d2 = await makeDevice(app.id, { provider: 'fcm', platform: 'android', tags: ['vip'] });
+    // non-vip device — must not be included
+    await makeDevice(app.id, { provider: 'fcm', platform: 'android', tags: [] });
+
+    const camp = await makeCampaign(app.id, {
+      targetType: 'segment',
+      targetValueJsonb: { filter: { tag: 'vip' } },
+    });
+
+    const res = await enqueueCampaign(camp.id);
+    // Both vip devices are in the same fcm/android group -> 1 chunk job
+    expect(res.jobsCreated).toBe(1);
+
+    const rows = await db.select().from(jobs).where(eq(jobs.type, JOB_TYPE_SEND));
+    expect(rows).toHaveLength(1);
+    const payload = rows[0].payloadJsonb as { deviceIds: string[]; provider: string; platform: string };
+    expect(payload.provider).toBe('fcm');
+    expect(payload.platform).toBe('android');
+    // Only the vip device ids should be in the job
+    expect(payload.deviceIds.sort()).toEqual([d1.id, d2.id].sort());
+  });
+
+  it('segment with providerScope filters audience to specified provider', async () => {
+    const { app } = await makeApp();
+    await makeDevice(app.id, { provider: 'fcm', platform: 'android', tags: ['vip'] });
+    await makeDevice(app.id, { provider: 'huawei', platform: 'huawei', tags: ['vip'] });
+
+    const camp = await makeCampaign(app.id, {
+      targetType: 'segment',
+      targetValueJsonb: { filter: { tag: 'vip' } },
+      providerScope: 'fcm',
+    });
+
+    const res = await enqueueCampaign(camp.id);
+    expect(res.jobsCreated).toBe(1);
+
+    const rows = await db.select().from(jobs).where(eq(jobs.type, JOB_TYPE_SEND));
+    expect(rows).toHaveLength(1);
+    const payload = rows[0].payloadJsonb as { provider: string };
+    expect(payload.provider).toBe('fcm');
+  });
 });

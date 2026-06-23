@@ -2,6 +2,7 @@ import { db } from '~~/server/db/client';
 import { campaigns, devices, jobs } from '~~/server/db/schema';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { JOB_TYPE_SEND, VENDOR_CHUNK_LIMIT, type SendChunkPayload } from './types';
+import { resolveAudienceDevices, type AudienceFilter } from '~~/server/utils/audiences/resolve';
 
 type Group = { provider: 'fcm' | 'huawei'; platform: SendChunkPayload['platform']; deviceIds: string[] };
 
@@ -24,8 +25,12 @@ async function resolveAudience(campaignId: string): Promise<typeof devices.$infe
       .where(and(eq(devices.appId, camp.appId), eq(devices.status, 'active'), inArray(devices.id, ids), scopeFilter))
       .orderBy(asc(devices.provider), asc(devices.platform), asc(devices.id));
   }
-  // segment | topic are reserved enum values — rejected upstream at validation; defensive here.
-  throw new Error(`unsupported target_type ${camp.targetType}`);
+  if (camp.targetType === 'segment') {
+    const tv = camp.targetValueJsonb as { filter?: AudienceFilter };
+    const rows = await resolveAudienceDevices(camp.appId, tv.filter ?? {});
+    return camp.providerScope === 'both' ? rows : rows.filter(d => d.provider === camp.providerScope);
+  }
+  throw new Error(`unsupported target_type ${camp.targetType}`); // topic still reserved
 }
 
 function groupByProviderPlatform(rows: typeof devices.$inferSelect[]): Group[] {
