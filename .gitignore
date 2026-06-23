@@ -9,7 +9,15 @@ dist
 *.log
 .DS_Store
 
-# local scratch
+# local scratch / testing artifacts — never pulled to the server
 .playwright-mcp/
+test-results/
+playwright-report/
+coverage/
+.vitest/
+/*.png
 firebase-center-login.png
 tour-*.png
+feat-*.png
+*.local
+.claude/

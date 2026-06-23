@@ -146,6 +146,8 @@ scripts/backup.sh          # pg_dump → a timestamped .dump (retain off-host)
 **A database backup is useless without `NUXT_BO_MASTER_KEY`.** Back the key up **separately** from the dump; restoring requires **both**. Full runbook: [`docs/RESTORE.md`](docs/RESTORE.md).
 
 ## Deploying to a server
+> **Full runbook:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — phased setup (deploy now without a domain, then add TLS when the domain is ready), operations, backups, and troubleshooting. `CLAUDE.md` onboards an AI ops agent to it.
+
 1. Copy the repo to the target machine (Docker installed).
 2. Create `.env` with production values; **provision `NUXT_BO_MASTER_KEY` out-of-band** (never in git, never only in the volume).
 3. `docker compose up -d --build`. The stack self-initializes (migrate → seed → serve) and restarts on reboot (`restart: unless-stopped`).
@@ -176,4 +178,6 @@ docs/                 design spec, technical reference, restore runbook
 - [`docs/superpowers/specs/2026-06-19-firebase-center-design.md`](docs/superpowers/specs/2026-06-19-firebase-center-design.md) — the full design spec.
 - [`docs/superpowers/specs/2026-06-19-firebase-center-technical-reference.md`](docs/superpowers/specs/2026-06-19-firebase-center-technical-reference.md) — FCM/Huawei API mechanics (auth, payloads, error handling).
 - [`docs/RESTORE.md`](docs/RESTORE.md) — backup/restore runbook.
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — full server deployment & operations runbook.
+- [`CLAUDE.md`](CLAUDE.md) — onboarding for an operations agent running on the server.
 - `DESIGN.md` / `PRODUCT.md` — UI design system and product context.
