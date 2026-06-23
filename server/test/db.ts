@@ -7,7 +7,7 @@ export { db };
 
 const ALL_TABLES = [
   'deliveries', 'campaigns', 'jobs', 'imports', 'devices',
-  'app_ingest_keys', 'app_credentials', 'apps', 'site_send_keys', 'companies',
+  'audiences', 'app_ingest_keys', 'app_credentials', 'apps', 'site_send_keys', 'companies',
   'audit_log', 'sessions', 'users',
 ];
 

@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, integer, timestamp, jsonb, boolean, pgEnum, unique } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // ---- Enums ----
 export const userRole = pgEnum('user_role', ['admin', 'operator']);
@@ -13,7 +14,7 @@ export const campaignMode = pgEnum('campaign_mode', ['notification', 'data']);
 export const campaignPriority = pgEnum('campaign_priority', ['high', 'normal']);
 export const targetType = pgEnum('target_type', ['all', 'tokens', 'segment', 'topic']);
 export const providerScope = pgEnum('provider_scope', ['both', 'fcm', 'huawei']);
-export const campaignStatus = pgEnum('campaign_status', ['draft', 'queued', 'sending', 'done', 'failed']);
+export const campaignStatus = pgEnum('campaign_status', ['draft', 'queued', 'sending', 'done', 'failed', 'scheduled', 'canceled']);
 export const deliveryStatus = pgEnum('delivery_status', ['queued', 'sent', 'failed', 'invalid', 'gave_up']);
 export const jobStatus = pgEnum('job_status', ['pending', 'running', 'done', 'failed']);
 
@@ -43,6 +44,17 @@ export const apps = pgTable('apps', {
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({ uqCompanyName: unique().on(t.companyId, t.name) }));
+
+export const audiences = pgTable('audiences', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  appId: uuid('app_id').notNull().references(() => apps.id),
+  name: text('name').notNull(),
+  platform: devicePlatform('platform'),
+  provider: providerEnum('provider'),
+  tag: text('tag'),
+  createdBy: uuid('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({ uq: unique().on(t.appId, t.name) }));
 
 export const appCredentials = pgTable('app_credentials', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -78,6 +90,7 @@ export const devices = pgTable('devices', {
   platform: devicePlatform('platform').notNull(),
   token: text('token').notNull(),
   externalUserId: text('external_user_id'),
+  tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
   attributesJsonb: jsonb('attributes_jsonb').notNull().default({}),
   status: deviceStatus('status').notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -109,6 +122,8 @@ export const campaigns = pgTable('campaigns', {
   targetValueJsonb: jsonb('target_value_jsonb').notNull().default({}),
   providerScope: providerScope('provider_scope').notNull().default('both'),
   status: campaignStatus('status').notNull().default('draft'),
+  scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
+  broadcastId: uuid('broadcast_id'),
   createdBy: uuid('created_by').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

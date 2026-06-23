@@ -36,6 +36,20 @@
       "when": 1781937195518,
       "tag": "0004_shallow_shaman",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782197405805,
+      "tag": "0005_real_skreet",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782197500000,
+      "tag": "0006_push_targets_schema",
+      "breakpoints": true
     }
   ]
 }
