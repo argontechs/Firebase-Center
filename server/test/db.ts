@@ -76,6 +76,8 @@ export async function makeTestApp() {
     { default: audiencesPost },
     { default: audiencePatch },
     { default: audienceDelete },
+    // D1: operator device list
+    { default: devicesListGet },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -126,6 +128,8 @@ export async function makeTestApp() {
     import('~~/server/api/apps/[id]/audiences/index.post'),
     import('~~/server/api/apps/[id]/audiences/[aid]/index.patch'),
     import('~~/server/api/apps/[id]/audiences/[aid]/index.delete'),
+    // D1: operator device list
+    import('~~/server/api/devices/index.get'),
   ]);
 
   const app = createApp();
@@ -180,6 +184,8 @@ export async function makeTestApp() {
   router.post('/api/apps/:id/audiences', eventHandler(audiencesPost));
   router.patch('/api/apps/:id/audiences/:aid', eventHandler(audiencePatch));
   router.delete('/api/apps/:id/audiences/:aid', eventHandler(audienceDelete));
+  // D1: operator device list
+  router.get('/api/devices', eventHandler(devicesListGet));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
