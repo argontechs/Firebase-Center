@@ -13,10 +13,12 @@ interface MeResponse {
 const { data: me } = await useFetch<MeResponse>('/api/auth/me', { key: 'auth-me' });
 const userEmail = computed(() => me.value?.user?.email ?? '');
 
-// Global nav. Compose + Send history are per-app (reached from a Site's App),
-// so the global menu links the top-level destinations that actually exist.
+// Global nav. Top-level destinations.
 const navItems = [
-  { label: 'Sites',               to: '/companies'          },
+  { label: 'Sites',               to: '/companies'           },
+  { label: 'Targets',             to: '/targets'             },
+  { label: 'Send',                to: '/send'                },
+  { label: 'History',             to: '/history'             },
   { label: 'Import credentials',  to: '/imports/credentials' },
 ] as const;
 

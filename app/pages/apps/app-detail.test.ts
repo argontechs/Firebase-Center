@@ -78,16 +78,16 @@ describe('app detail shell', () => {
     expect(wrapper.find('[data-test="app-title"]').text()).toContain('Acme Shopper');
   });
 
-  it('renders exactly five tab links', async () => {
+  it('renders exactly two tab links', async () => {
     const wrapper = await mountPage();
     const tabs = wrapper.findAll('[data-test="app-tab"]');
-    expect(tabs).toHaveLength(5);
+    expect(tabs).toHaveLength(2);
   });
 
-  it('tab labels are correct', async () => {
+  it('tab labels are Credentials and Ingest Keys', async () => {
     const wrapper = await mountPage();
     const labels = wrapper.findAll('[data-test="app-tab"]').map((t) => t.text());
-    expect(labels).toEqual(['Credentials', 'Devices', 'Ingest Keys', 'Compose', 'History']);
+    expect(labels).toEqual(['Credentials', 'Ingest Keys']);
   });
 
   it('tab links point to the correct child routes', async () => {
@@ -95,10 +95,7 @@ describe('app detail shell', () => {
     const hrefs = wrapper.findAll('[data-test="app-tab"]').map((t) => t.attributes('href'));
     expect(hrefs).toEqual([
       '/apps/a1/credentials',
-      '/apps/a1/devices',
       '/apps/a1/ingest-keys',
-      '/apps/a1/compose',
-      '/apps/a1/history',
     ]);
   });
 
@@ -107,5 +104,21 @@ describe('app detail shell', () => {
     const panel = wrapper.find('[data-test="tab-panel"]');
     expect(panel.exists()).toBe(true);
     expect(panel.find('[data-stub="NuxtPage"]').exists()).toBe(true);
+  });
+
+  it('renders a "View targets" quick-link to /targets?appId=a1', async () => {
+    const wrapper = await mountPage();
+    const link = wrapper.find('[data-test="quick-link-targets"]');
+    expect(link.exists()).toBe(true);
+    expect(link.text()).toContain('View targets');
+    expect(link.attributes('href')).toBe('/targets?appId=a1');
+  });
+
+  it('renders a "Send to this app" quick-link to /send?appId=a1', async () => {
+    const wrapper = await mountPage();
+    const link = wrapper.find('[data-test="quick-link-send"]');
+    expect(link.exists()).toBe(true);
+    expect(link.text()).toContain('Send to this app');
+    expect(link.attributes('href')).toBe('/send?appId=a1');
   });
 });

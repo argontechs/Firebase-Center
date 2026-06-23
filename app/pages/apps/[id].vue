@@ -9,10 +9,7 @@ const { data: app } = await useFetch<App>(`/api/apps/${appId}`);
 
 const tabs = [
   { label: 'Credentials', segment: 'credentials' },
-  { label: 'Devices',     segment: 'devices' },
   { label: 'Ingest Keys', segment: 'ingest-keys' },
-  { label: 'Compose',     segment: 'compose' },
-  { label: 'History',     segment: 'history' },
 ] as const;
 
 function isActive(segment: string) {
@@ -25,6 +22,18 @@ function isActive(segment: string) {
     <div class="page-head">
       <div class="page-head-text">
         <h1 data-test="app-title" class="page-head-title">{{ app?.name }}</h1>
+      </div>
+      <div class="page-head-actions">
+        <NuxtLink
+          :to="`/targets?appId=${appId}`"
+          class="btn btn-ghost"
+          data-test="quick-link-targets"
+        >View targets</NuxtLink>
+        <NuxtLink
+          :to="`/send?appId=${appId}`"
+          class="btn btn-ghost"
+          data-test="quick-link-send"
+        >Send to this app</NuxtLink>
       </div>
     </div>
 
