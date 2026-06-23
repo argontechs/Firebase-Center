@@ -9,7 +9,8 @@ export type AuditAction =
   | 'credential_save' | 'credential_rotate'
   | 'campaign_send' | 'import_run'
   | 'api_send'
-  | 'audience_save' | 'audience_delete';
+  | 'audience_save' | 'audience_delete'
+  | 'device_add_manual' | 'device_edit_tags' | 'device_delete';
 
 export async function audit(input: {
   userId: string | null;

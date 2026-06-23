@@ -78,6 +78,10 @@ export async function makeTestApp() {
     { default: audienceDelete },
     // D1: operator device list
     { default: devicesListGet },
+    // D2: manual add + tag edit + delete
+    { default: deviceManualPost },
+    { default: devicePatch },
+    { default: deviceDelete },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -130,6 +134,10 @@ export async function makeTestApp() {
     import('~~/server/api/apps/[id]/audiences/[aid]/index.delete'),
     // D1: operator device list
     import('~~/server/api/devices/index.get'),
+    // D2: manual add + tag edit + delete
+    import('~~/server/api/apps/[id]/devices/manual.post'),
+    import('~~/server/api/devices/[id]/index.patch'),
+    import('~~/server/api/devices/[id]/index.delete'),
   ]);
 
   const app = createApp();
@@ -186,6 +194,10 @@ export async function makeTestApp() {
   router.delete('/api/apps/:id/audiences/:aid', eventHandler(audienceDelete));
   // D1: operator device list
   router.get('/api/devices', eventHandler(devicesListGet));
+  // D2: manual add + tag edit + delete
+  router.post('/api/apps/:id/devices/manual', eventHandler(deviceManualPost));
+  router.patch('/api/devices/:id', eventHandler(devicePatch));
+  router.delete('/api/devices/:id', eventHandler(deviceDelete));
   app.use(router);
 
   const nodeListener = toNodeListener(app);
