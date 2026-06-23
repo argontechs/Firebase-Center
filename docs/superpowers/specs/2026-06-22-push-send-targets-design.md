@@ -28,20 +28,19 @@ Left sidebar becomes:
 
 ## 4. Data model changes (additive)
 
-All changes are new migrations; existing columns are untouched.
+All changes are new migrations; existing columns are untouched. The audience send **reuses the existing** `campaigns.targetType` enum (which already reserves `segment`) and `targetValueJsonb`, instead of new campaign columns.
 
-- **`devices`**: add `tags text[] NOT NULL DEFAULT '{}'`. Settable on manual add and via an optional `tags` column on bulk import (comma-separated → array). GIN index on `tags` for filtering.
-- **New `audiences` table**:
+- **`devices`**: add `tags text[] NOT NULL DEFAULT '{}'` with a **GIN index** for tag filtering. Settable on manual add and via an optional `tags` column on bulk import (comma-separated → array). (`devices.externalUserId` and `attributesJsonb` already exist and are untouched.)
+- **New `audiences` table** (saved filter definitions):
   - `id uuid pk`, `app_id uuid fk → apps(id) ON DELETE CASCADE`, `name text NOT NULL`,
-  - filter columns (all nullable = "any"): `platform platform_enum`, `provider provider_enum`, `tag text`,
+  - filter columns (all nullable = "any"): `platform device_platform`, `provider provider`, `tag text`,
   - `created_by uuid`, `created_at timestamptz default now()`.
   - `UNIQUE(app_id, name)`.
-- **`campaigns`**: add
+- **`campaigns`**: add only
   - `scheduled_at timestamptz NULL` (null = send now),
-  - `audience_id uuid NULL fk → audiences(id) ON DELETE SET NULL` (provenance; the resolved filter is also snapshotted so deleting an audience never changes an in-flight/historical send),
-  - `audience_filter jsonb NULL` (snapshot of `{platform?, provider?, tag?}` at send time),
-  - `broadcast_id uuid NULL` (groups campaigns created by one multi-app send),
-  - extend the status enum with `scheduled` and `canceled`.
+  - `broadcast_id uuid NULL` (groups the per-app campaigns created by one multi-app send),
+  - extend the `campaign_status` enum with `scheduled` and `canceled`.
+  - An **audience send** sets `targetType='segment'` and snapshots the resolution into `targetValueJsonb = { audience_id?: uuid, filter: { platform?, provider?, tag? } }`. Snapshotting the filter means deleting an audience never alters an in-flight or historical send. (No `audience_id`/`audience_filter` columns are needed.)
 - **`jobs`** already carries `campaign_id` (from the F6 fix) — reused for scheduling/finalization.
 
 ## 5. Targets page
@@ -70,7 +69,7 @@ Route `app/pages/targets/index.vue`. Tabs: **Devices** (default) and **Audiences
 **Endpoints (operator-authed):**
 - `GET /api/apps/:id/audiences` (each row includes the current resolved count).
 - `POST /api/apps/:id/audiences`, `PATCH /api/apps/:id/audiences/:aid`, `DELETE /api/apps/:id/audiences/:aid`.
-- Resolution logic lives in a shared `server/utils/audiences/resolve.ts`, reused by both the count endpoint and the send pipeline.
+- Resolution logic lives in a shared `server/utils/audiences/resolve.ts`, reused by both the count endpoint and the send pipeline. The pipeline's `resolveAudience`/`previewAudience` (in `server/utils/queue/enqueue.ts` and `server/utils/campaigns/audience.ts`) gain a `segment` branch that reads `targetValueJsonb.filter` and applies the same predicate — replacing today's reserved-value rejection.
 
 ## 7. Send page
 
@@ -86,13 +85,16 @@ Route `app/pages/send/index.vue`. A guided composer:
 
 **Behavior:** For each selected app, the server resolves recipients → creates a `campaigns` row (snapshotting `audience_filter`), and either **enqueues immediately** (send now, via the existing `enqueueCampaign`) or sets `status='scheduled'` + `scheduled_at`. A broadcast assigns a shared `broadcast_id` across the per-app campaigns.
 
-**Endpoints:**
-- Extend `POST /api/campaigns/preview` to accept `{ appId, recipients }` where `recipients` is `{type: 'all'|'audience'|'devices'|'filter', audienceId?, deviceIds?, filter?}`.
-- Replace/extend `POST /api/campaigns` to accept `{ appIds[], recipients, message, scheduledAt? }`. Returns the created campaign id(s) + `broadcast_id` when multi-app. (The send-API `POST /api/v1/messages` may later gain `scheduledAt`/audience support; not in this v1.)
+**Endpoints (operator-authed). The UI `recipients` choice maps to the existing `targetType`/`targetValue`:** `all`→`all`; `specific devices`→`tokens` (`{device_ids}`); `audience`/`ad-hoc filter`→`segment` (`{audience_id?, filter}`).
+- `POST /api/campaigns/preview` — extend to accept `targetType='segment'` with `targetValue={audience_id?, filter}`; returns per-(provider, platform) counts. Single app.
+- `POST /api/campaigns` — single-app, **extended and backward-compatible**: also accepts `targetType='segment'` and an optional `scheduledAt`. When `scheduledAt` is a future time it inserts `status='scheduled'` and does **not** enqueue; otherwise behaviour is unchanged (insert `queued` + `enqueueCampaign`).
+- `POST /api/campaigns/broadcast` — **new**, multi-app: `{ appIds[], message, recipients, scheduledAt? }`. Reuses the single-app create logic per app, assigns a shared `broadcast_id`, returns `{ broadcastId, campaignIds }`.
+- `POST /api/campaigns/:id/cancel` — `scheduled → canceled` (only while still scheduled).
+- The send-API `POST /api/v1/messages` is **unchanged** in v1 (no audiences/scheduling).
 
 ## 8. Scheduling mechanism
 
-No new service. The existing **worker loop** (`server/utils/queue/loop.ts`) gains a **due-campaign sweep** each tick:
+No new service. `startWorkerLoop` (`server/utils/queue/loop.ts`) already runs two timers (job-drain ~1 s, stale-job sweep ~5 min); we add a **third timer (~5 s)** calling a new `sweepDueCampaigns()` (`server/utils/queue/due.ts`). A partial index on `campaigns (scheduled_at) WHERE status='scheduled'` keeps the sweep cheap. Each run:
 
 ```
 SELECT id FROM campaigns
