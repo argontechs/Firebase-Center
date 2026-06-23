@@ -82,6 +82,8 @@ export async function makeTestApp() {
     { default: deviceManualPost },
     { default: devicePatch },
     { default: deviceDelete },
+    // E2: broadcast
+    { default: campaignBroadcastPost },
   ] = await Promise.all([
     import('~~/server/middleware/auth'),
     import('~~/server/api/auth/login.post'),
@@ -138,6 +140,8 @@ export async function makeTestApp() {
     import('~~/server/api/apps/[id]/devices/manual.post'),
     import('~~/server/api/devices/[id]/index.patch'),
     import('~~/server/api/devices/[id]/index.delete'),
+    // E2: broadcast
+    import('~~/server/api/campaigns/broadcast.post'),
   ]);
 
   const app = createApp();
@@ -198,6 +202,8 @@ export async function makeTestApp() {
   router.post('/api/apps/:id/devices/manual', eventHandler(deviceManualPost));
   router.patch('/api/devices/:id', eventHandler(devicePatch));
   router.delete('/api/devices/:id', eventHandler(deviceDelete));
+  // E2: broadcast
+  router.post('/api/campaigns/broadcast', eventHandler(campaignBroadcastPost));
   app.use(router);
 
   const nodeListener = toNodeListener(app);

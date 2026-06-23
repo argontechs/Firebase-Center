@@ -1,13 +1,7 @@
 import { z } from 'zod';
 import { defineEventHandler, readBody, createError } from 'h3';
-import { db } from '~~/server/db/client';
-import { campaigns } from '~~/server/db/schema';
 import { requireSession } from '~~/server/utils/auth/guard';
-import { previewAudience } from '~~/server/utils/campaigns/audience';
-import { validatePayloadSize, validateHuaweiClickAction, PayloadTooLargeError } from '~~/server/utils/payload';
-import { enqueueCampaign } from '~~/server/utils/queue/enqueue';
-import { audit } from '~~/server/utils/audit';
-import type { NeutralMessage, Provider } from '~~/server/utils/push/types';
+import { createCampaign } from '~~/server/utils/campaigns/create';
 
 const Body = z.object({
   appId: z.string().uuid(),
@@ -62,96 +56,30 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 422, statusMessage: 'invalid target_type' });
   }
 
-  const message: NeutralMessage = {
-    title: body.title,
-    body: body.body,
-    data: body.data as Record<string, string>,
-    mode: body.mode,
-    priority: body.priority,
-    ...(body.image ? { image: body.image } : {}),
-  };
-
-  // Addendum-D: validate Huawei click_action.type:1 requirement
-  validateHuaweiClickAction(message);
-
-  // Resolve the audience and validate payload size per distinct provider.
-  const groups = await previewAudience(body.appId, body.targetType, body.targetValue, body.providerScope);
-  const providers = [...new Set(groups.map((g) => g.provider))] as Provider[];
-  const checkProviders = providers.length > 0 ? providers : (['fcm'] as Provider[]);
-
-  for (const provider of checkProviders) {
-    try {
-      validatePayloadSize(message, provider);
-    } catch (e) {
-      if (e instanceof PayloadTooLargeError) {
-        throw createError({
-          statusCode: 413,
-          statusMessage: `payload too large for ${provider}: ${e.bytes} bytes (max 4096)`,
-        });
-      }
-      throw e;
-    }
-  }
-
-  // Determine if this is a future-scheduled campaign.
-  const now = new Date();
-  const scheduledDate = body.scheduledAt ? new Date(body.scheduledAt) : null;
-  const isScheduled = scheduledDate !== null && scheduledDate > now;
-
-  if (isScheduled) {
-    // Insert as scheduled — do not enqueue yet.
-    const [camp] = await db.insert(campaigns).values({
+  try {
+    const result = await createCampaign({
+      userId: session.userId,
       appId: body.appId,
       title: body.title,
       body: body.body,
-      dataJsonb: body.data,
+      data: body.data as Record<string, string>,
       mode: body.mode,
       priority: body.priority,
-      targetType: body.targetType,
-      targetValueJsonb: body.targetValue,
+      targetType: body.targetType as 'all' | 'tokens' | 'segment',
+      targetValue: body.targetValue,
       providerScope: body.providerScope,
-      status: 'scheduled',
-      scheduledAt: scheduledDate,
-      createdBy: session.userId,
-    }).returning();
-
-    await audit({
-      userId: session.userId,
-      action: 'campaign_scheduled',
-      targetType: 'campaign',
-      targetId: camp.id,
-      meta: { appId: body.appId, targetType: body.targetType, scheduledAt: body.scheduledAt },
+      image: body.image,
+      scheduledAt: body.scheduledAt,
     });
 
-    return { campaignId: camp.id, scheduled: true, jobsCreated: 0 };
+    if (result.scheduled) {
+      return { campaignId: result.campaignId, scheduled: true, jobsCreated: 0 };
+    }
+    return { campaignId: result.campaignId, jobsCreated: result.jobsCreated };
+  } catch (e: any) {
+    if (e.statusCode === 413) {
+      throw createError({ statusCode: 413, statusMessage: e.message });
+    }
+    throw e;
   }
-
-  // Insert the campaign row.
-  const [camp] = await db.insert(campaigns).values({
-    appId: body.appId,
-    title: body.title,
-    body: body.body,
-    dataJsonb: body.data,
-    mode: body.mode,
-    priority: body.priority,
-    targetType: body.targetType,
-    targetValueJsonb: body.targetValue,
-    providerScope: body.providerScope,
-    status: 'queued',
-    createdBy: session.userId,
-  }).returning();
-
-  // Enqueue delivery jobs.
-  const { jobsCreated } = await enqueueCampaign(camp.id);
-
-  // Audit the send event.
-  await audit({
-    userId: session.userId,
-    action: 'campaign_send',
-    targetType: 'campaign',
-    targetId: camp.id,
-    meta: { appId: body.appId, targetType: body.targetType, jobsCreated },
-  });
-
-  return { campaignId: camp.id, jobsCreated };
 });
