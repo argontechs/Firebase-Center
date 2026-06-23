@@ -380,7 +380,7 @@ function toggleAppInBroadcast(id: string) {
         </div>
 
         <!-- Preview breakdown -->
-        <div v-if="previewResult" class="panel" data-test="preview-breakdown" style="background: var(--surface-2);">
+        <div v-if="previewResult" class="preview-breakdown" data-test="preview-breakdown">
           <p class="field-label" style="margin-bottom: 8px;">Recipient breakdown</p>
           <table class="table" style="font-size: var(--t-xs);">
             <thead>

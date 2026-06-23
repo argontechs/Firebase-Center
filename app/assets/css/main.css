@@ -270,6 +270,14 @@ code, .mono {
   padding: 22px 24px;
 }
 
+/* ── Preview breakdown (surface-2 block, not a nested panel) ─ */
+.preview-breakdown {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 16px 18px;
+}
+
 /* ── Buttons ─────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
