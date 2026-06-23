@@ -17,9 +17,18 @@ const Body = z.object({
   mode: z.enum(['notification', 'data']).default('notification'),
   priority: z.enum(['high', 'normal']).default('high'),
   targetType: z.string(),
-  targetValue: z.object({ device_ids: z.array(z.string()).optional() }).default({}),
+  targetValue: z.object({
+    device_ids: z.array(z.string()).optional(),
+    audience_id: z.string().optional(),
+    filter: z.object({
+      platform: z.enum(['android', 'ios', 'huawei', 'web']).optional(),
+      provider: z.enum(['fcm', 'huawei']).optional(),
+      tag: z.string().optional(),
+    }).optional(),
+  }).default({}),
   providerScope: z.enum(['fcm', 'huawei', 'both']).default('both'),
   image: z.string().url().optional(),
+  scheduledAt: z.string().datetime().optional(),
 });
 
 /**
@@ -42,14 +51,14 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) throw createError({ statusCode: 422, statusMessage: 'invalid body' });
   const body = parsed.data;
 
-  // Reserved enum values — rejected until built (design §6/§10).
-  if (body.targetType === 'segment' || body.targetType === 'topic') {
+  // 'topic' is still reserved; 'segment' is now supported.
+  if (body.targetType === 'topic') {
     throw createError({
       statusCode: 422,
-      statusMessage: `target_type '${body.targetType}' is not supported in v1`,
+      statusMessage: `target_type 'topic' is not supported`,
     });
   }
-  if (body.targetType !== 'all' && body.targetType !== 'tokens') {
+  if (body.targetType !== 'all' && body.targetType !== 'tokens' && body.targetType !== 'segment') {
     throw createError({ statusCode: 422, statusMessage: 'invalid target_type' });
   }
 
@@ -82,6 +91,39 @@ export default defineEventHandler(async (event) => {
       }
       throw e;
     }
+  }
+
+  // Determine if this is a future-scheduled campaign.
+  const now = new Date();
+  const scheduledDate = body.scheduledAt ? new Date(body.scheduledAt) : null;
+  const isScheduled = scheduledDate !== null && scheduledDate > now;
+
+  if (isScheduled) {
+    // Insert as scheduled — do not enqueue yet.
+    const [camp] = await db.insert(campaigns).values({
+      appId: body.appId,
+      title: body.title,
+      body: body.body,
+      dataJsonb: body.data,
+      mode: body.mode,
+      priority: body.priority,
+      targetType: body.targetType,
+      targetValueJsonb: body.targetValue,
+      providerScope: body.providerScope,
+      status: 'scheduled',
+      scheduledAt: scheduledDate,
+      createdBy: session.userId,
+    }).returning();
+
+    await audit({
+      userId: session.userId,
+      action: 'campaign_scheduled',
+      targetType: 'campaign',
+      targetId: camp.id,
+      meta: { appId: body.appId, targetType: body.targetType, scheduledAt: body.scheduledAt },
+    });
+
+    return { campaignId: camp.id, scheduled: true, jobsCreated: 0 };
   }
 
   // Insert the campaign row.

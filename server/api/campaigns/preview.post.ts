@@ -9,8 +9,16 @@ const Body = z.object({
   appId: z.string().uuid(),
   mode: z.enum(['notification', 'data']).default('notification'),
   priority: z.enum(['high', 'normal']).default('high'),
-  targetType: z.enum(['all', 'tokens']),
-  targetValue: z.object({ device_ids: z.array(z.string()).optional() }).default({}),
+  targetType: z.enum(['all', 'tokens', 'segment']),
+  targetValue: z.object({
+    device_ids: z.array(z.string()).optional(),
+    audience_id: z.string().optional(),
+    filter: z.object({
+      platform: z.enum(['android', 'ios', 'huawei', 'web']).optional(),
+      provider: z.enum(['fcm', 'huawei']).optional(),
+      tag: z.string().optional(),
+    }).optional(),
+  }).default({}),
   providerScope: z.enum(['fcm', 'huawei', 'both']).default('both'),
   title: z.string().min(1),
   body: z.string().min(1),

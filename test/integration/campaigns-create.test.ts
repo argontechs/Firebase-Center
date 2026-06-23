@@ -122,14 +122,18 @@ describe('POST /api/campaigns', () => {
     expect(a).toHaveLength(1);
   });
 
-  it('rejects target_type=segment with 422', async () => {
-    await expect(fetch('/api/campaigns', {
+  it('accepts target_type=segment (segment sends are now supported)', async () => {
+    // No devices seeded — segment with no matches returns jobsCreated:0 without error.
+    const res = await fetch('/api/campaigns', {
       method: 'POST',
       body: {
         appId, title: 'x', body: 'y', data: {},
-        mode: 'notification', priority: 'high', targetType: 'segment', targetValue: {}, providerScope: 'both',
+        mode: 'notification', priority: 'high', targetType: 'segment',
+        targetValue: { filter: { tag: 'vip' } }, providerScope: 'both',
       },
-    })).rejects.toMatchObject({ statusCode: 422 });
+    });
+    expect(res.campaignId).toBeTruthy();
+    expect(res.jobsCreated).toBe(0);
   });
 
   it('rejects target_type=topic with 422', async () => {
