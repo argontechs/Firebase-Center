@@ -10,9 +10,24 @@ CREATE TABLE IF NOT EXISTS "audiences" (
 	CONSTRAINT "audiences_app_id_name_unique" UNIQUE("app_id","name")
 );
 --> statement-breakpoint
-ALTER TABLE "campaigns" ADD COLUMN "scheduled_at" timestamp with time zone;--> statement-breakpoint
-ALTER TABLE "campaigns" ADD COLUMN "broadcast_id" uuid;--> statement-breakpoint
-ALTER TABLE "devices" ADD COLUMN "tags" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "campaigns" ADD COLUMN "scheduled_at" timestamp with time zone;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "campaigns" ADD COLUMN "broadcast_id" uuid;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "devices" ADD COLUMN "tags" text[] DEFAULT '{}'::text[] NOT NULL;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "audiences" ADD CONSTRAINT "audiences_app_id_apps_id_fk" FOREIGN KEY ("app_id") REFERENCES "public"."apps"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
