@@ -80,3 +80,9 @@
 - Each task had blocking findings caught + fixed (deletion via sandbox, missing Edit action, bulk-import link, count-endpoint test, CSRF assertions, nested panel, badge-danger).
 - Controller fix: credentials-read-rotate + master-key-rotation teardown → resetDb() (the 7 Phase-3-gate failures were stale-DB FK violations from manual db.delete cleanups).
 - SUITE GREEN: 615 passed, 1 skipped. Build PASS. Next: visual verify + final whole-branch review (merge-base 425f7ce8).
+
+## PUSH SEND & TARGETS — final review + fixes complete 2026-06-23
+- FINAL WHOLE-BRANCH REVIEW (merge-base 425f7ce8): 9 confirmed -> 7 fixes (commit 91f4619f). CRITICAL: saved-audience send ignored audience_id and resolved to ALL devices (preview lied) -> now resolves audience_id->filter, snapshotted at create, in create+preview+enqueue, with cross-app 404. Important: cancel/sweep race (worker short-circuits canceled + due sweep claims before enqueue); PATCH /api/devices/:id company-visibility scope; 0005 enum migration ADD VALUE IF NOT EXISTS; broadcast mode/preview correctness; undefined CSS classes.
+- UX follow-up fixed: Send page audience picker now a NAMED DROPDOWN (was a UUID paste field) (commit f112e8bb).
+- LIVE VERIFIED: VIP Android audience preview resolves to exactly 1 of 4 devices (not all). SUITE GREEN: 623 passed, 1 skipped. Build PASS.
+- Known test-infra flakiness (not feature defects): backoff jitter timing test; occasional DB-contention on a full run (pass in isolation). Follow-up: harden test isolation (resetDb in all integration files).
