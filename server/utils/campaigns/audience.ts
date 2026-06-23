@@ -3,7 +3,7 @@ import { devices } from '~~/server/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { resolveCredential } from '~~/server/utils/credentials/resolve';
 import type { Provider, DevicePlatform } from '~~/server/utils/push/types';
-import { resolveAudienceDevices, type AudienceFilter } from '~~/server/utils/audiences/resolve';
+import { resolveAudienceDevices, filterForTarget, type AudienceFilter } from '~~/server/utils/audiences/resolve';
 
 export type ProviderScope = 'fcm' | 'huawei' | 'both';
 
@@ -26,7 +26,7 @@ export interface GroupPreview {
 export async function previewAudience(
   appId: string,
   targetType: 'all' | 'tokens' | 'segment',
-  targetValue: { device_ids?: string[]; filter?: AudienceFilter },
+  targetValue: { device_ids?: string[]; audience_id?: string; filter?: AudienceFilter },
   providerScope: ProviderScope = 'both',
 ): Promise<GroupPreview[]> {
   // F5: filter devices to the requested provider when not 'both'
@@ -36,7 +36,8 @@ export async function previewAudience(
   let rows: typeof devices.$inferSelect[];
 
   if (targetType === 'segment') {
-    const segmentRows = await resolveAudienceDevices(appId, targetValue.filter ?? {});
+    const filter = await filterForTarget(appId, targetValue);
+    const segmentRows = await resolveAudienceDevices(appId, filter);
     rows = providerScope === 'both' ? segmentRows : segmentRows.filter(d => d.provider === providerScope);
   } else {
     rows =

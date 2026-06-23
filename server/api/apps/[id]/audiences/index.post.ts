@@ -5,7 +5,7 @@ import { audiences } from '~~/server/db/schema';
 import { requireSession } from '~~/server/utils/auth/guard';
 import { isUniqueViolation } from '~~/server/utils/db-errors';
 import { audit } from '~~/server/utils/audit';
-import { countAudience, type AudienceFilter } from '~~/server/utils/audiences/resolve';
+import { countAudience, filterOf, type AudienceFilter } from '~~/server/utils/audiences/resolve';
 
 const bodySchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -13,14 +13,6 @@ const bodySchema = z.object({
   provider: z.enum(['fcm', 'huawei']).optional(),
   tag: z.string().optional(),
 });
-
-function filterOf(row: typeof audiences.$inferSelect): AudienceFilter {
-  const f: AudienceFilter = {};
-  if (row.platform) f.platform = row.platform;
-  if (row.provider) f.provider = row.provider;
-  if (row.tag) f.tag = row.tag;
-  return f;
-}
 
 export default defineEventHandler(async (event) => {
   const session = await requireSession(event);

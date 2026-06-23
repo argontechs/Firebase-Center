@@ -206,6 +206,12 @@ async function processSendChunk(job: typeof jobs.$inferSelect): Promise<ChunkOut
     .where(eq(campaigns.id, payload.campaignId));
   if (!camp) throw new Error(`campaign ${payload.campaignId} missing`);
 
+  // If the campaign was canceled between enqueue and processing, skip delivery.
+  if (camp.status === 'canceled') {
+    await db.update(jobs).set({ status: 'done' }).where(eq(jobs.id, job.id));
+    return { results: [], credentialId: null };
+  }
+
   const rows = await db
     .select()
     .from(devices)

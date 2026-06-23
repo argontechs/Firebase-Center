@@ -3,15 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '~~/server/db/client';
 import { audiences } from '~~/server/db/schema';
 import { requireSession } from '~~/server/utils/auth/guard';
-import { countAudience, type AudienceFilter } from '~~/server/utils/audiences/resolve';
-
-function filterOf(row: typeof audiences.$inferSelect): AudienceFilter {
-  const f: AudienceFilter = {};
-  if (row.platform) f.platform = row.platform;
-  if (row.provider) f.provider = row.provider;
-  if (row.tag) f.tag = row.tag;
-  return f;
-}
+import { countAudience, filterOf, type AudienceFilter } from '~~/server/utils/audiences/resolve';
 
 export default defineEventHandler(async (event) => {
   await requireSession(event);

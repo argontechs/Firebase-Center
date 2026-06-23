@@ -3,17 +3,19 @@
  *
  * Operator tag edit — sets the tags array on a device.
  *
+ * Scope check: mirrors DELETE. The device's app must belong to an active company.
+ *
  * Body: { tags: string[] }
  * Auth: requireSession
  * Errors:
  *   422 — validation failure
- *   404 — device not found
+ *   404 — device not found (or its company is not visible)
  */
 import { readBody, getRouterParam, createError, defineEventHandler } from 'h3';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '~~/server/db/client';
-import { devices } from '~~/server/db/schema';
+import { devices, apps, companies } from '~~/server/db/schema';
 import { requireSession } from '~~/server/utils/auth/guard';
 import { audit } from '~~/server/utils/audit';
 
@@ -31,6 +33,19 @@ export default defineEventHandler(async (event) => {
   }
 
   const { tags } = parsed.data;
+
+  // Scope check: resolve the device together with its app's company visibility.
+  // Under flat-RBAC all active companies are visible to every operator.
+  const [scoped] = await db
+    .select({ deviceId: devices.id, companyStatus: companies.status })
+    .from(devices)
+    .innerJoin(apps, eq(apps.id, devices.appId))
+    .innerJoin(companies, eq(companies.id, apps.companyId))
+    .where(eq(devices.id, id));
+
+  if (!scoped || scoped.companyStatus !== 'active') {
+    throw createError({ statusCode: 404, statusMessage: 'Device not found' });
+  }
 
   const [row] = await db.update(devices)
     .set({ tags })

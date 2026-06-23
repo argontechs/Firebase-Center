@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useSend } from '~/composables/useSend';
 
 const route = useRoute();
@@ -15,6 +15,20 @@ const selectedAppIds = ref<string[]>([]);
 
 // Recipients mode: all | audience | specific | filter
 const recipientsMode = ref<'all' | 'audience' | 'specific' | 'filter'>('all');
+
+// Broadcast only supports 'all' and 'filter'; 'audience' and 'specific' require a single app
+const recipientModes = computed(() =>
+  isBroadcast.value
+    ? (['all', 'filter'] as const)
+    : (['all', 'audience', 'specific', 'filter'] as const),
+);
+
+watch(isBroadcast, (b) => {
+  if (b && (recipientsMode.value === 'audience' || recipientsMode.value === 'specific')) {
+    recipientsMode.value = 'all';
+  }
+});
+
 const specificTokens = ref(''); // comma-separated device IDs for 'specific'
 const audienceId = ref('');
 const filterPlatform = ref('');
@@ -34,11 +48,14 @@ const scheduleAt = ref('');
 
 // Preview state
 const previewing = ref(false);
+// For broadcast: per-app preview map; for single: same structure keyed by selectedAppId
 const previewResult = ref<{
   byGroup: { provider: string; platform: string; count: number; credentialReady: boolean }[];
   totalBytes: number;
   withinLimit: boolean;
 } | null>(null);
+const broadcastPreviewMap = ref<Record<string, typeof previewResult.value>>({});
+const previewedAppIds = ref<string[]>([]);
 const previewError = ref('');
 
 // Submit state
@@ -91,13 +108,35 @@ function buildMessage() {
 async function runPreview() {
   previewError.value = '';
   previewResult.value = null;
-
-  const appId = isBroadcast.value ? (selectedAppIds.value[0] ?? '') : selectedAppId.value;
+  broadcastPreviewMap.value = {};
+  previewedAppIds.value = [];
 
   previewing.value = true;
   try {
-    const result = await sendComposable.preview(appId, buildRecipients(), buildMessage());
-    previewResult.value = result;
+    if (isBroadcast.value) {
+      const results = await Promise.all(
+        selectedAppIds.value.map(async (id) => {
+          const r = await sendComposable.preview(id, buildRecipients(), buildMessage());
+          return { id, r };
+        }),
+      );
+      const map: Record<string, typeof previewResult.value> = {};
+      for (const { id, r } of results) {
+        map[id] = r;
+      }
+      broadcastPreviewMap.value = map;
+      previewedAppIds.value = selectedAppIds.value.slice();
+      // Set previewResult to a combined summary for submit-enable check
+      const allGroups = results.flatMap(({ r }) => r.byGroup);
+      const maxBytes = Math.max(...results.map(({ r }) => r.totalBytes), 0);
+      const allWithinLimit = results.every(({ r }) => r.withinLimit);
+      previewResult.value = { byGroup: allGroups, totalBytes: maxBytes, withinLimit: allWithinLimit };
+    } else {
+      const appId = selectedAppId.value;
+      const result = await sendComposable.preview(appId, buildRecipients(), buildMessage());
+      previewResult.value = result;
+      previewedAppIds.value = [appId];
+    }
   } catch (e: unknown) {
     const err = e as { statusMessage?: string };
     previewError.value = err.statusMessage ?? 'Preview failed';
@@ -111,7 +150,15 @@ const sendBtnLabel = computed(() => {
   return 'Send now';
 });
 
-const canSubmit = computed(() => previewResult.value !== null && !submitting.value);
+const canSubmit = computed(() => {
+  if (!previewResult.value || submitting.value) return false;
+  if (isBroadcast.value) {
+    const previewed = previewedAppIds.value.slice().sort();
+    const selected = selectedAppIds.value.slice().sort();
+    return previewed.length === selected.length && previewed.every((id, i) => id === selected[i]);
+  }
+  return true;
+});
 
 async function handleSubmit() {
   if (!canSubmit.value) return;
@@ -231,8 +278,8 @@ function toggleAppInBroadcast(id: string) {
           <label class="field-label" for="recipients-mode">Recipients</label>
           <select id="recipients-mode" v-model="recipientsMode" data-test="recipients-mode">
             <option value="all">All devices</option>
-            <option value="audience">Saved audience</option>
-            <option value="specific">Specific device IDs</option>
+            <option v-if="recipientModes.includes('audience')" value="audience">Saved audience</option>
+            <option v-if="recipientModes.includes('specific')" value="specific">Specific device IDs</option>
             <option value="filter">By filter (platform/provider/tag)</option>
           </select>
         </div>
@@ -381,30 +428,59 @@ function toggleAppInBroadcast(id: string) {
 
         <!-- Preview breakdown -->
         <div v-if="previewResult" class="preview-breakdown" data-test="preview-breakdown">
-          <p class="field-label" style="margin-bottom: 8px;">Recipient breakdown</p>
-          <table class="table" style="font-size: var(--t-xs);">
-            <thead>
-              <tr>
-                <th>Provider</th>
-                <th>Platform</th>
-                <th>Devices</th>
-                <th>Credentials</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="g in previewResult.byGroup" :key="`${g.provider}-${g.platform}`">
-                <td>{{ g.provider }}</td>
-                <td>{{ g.platform }}</td>
-                <td>{{ g.count }}</td>
-                <td>
-                  <span class="badge" :class="g.credentialReady ? 'badge-ok' : 'badge-danger'">
-                    {{ g.credentialReady ? 'Ready' : 'Not ready' }}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-if="!previewResult.withinLimit" class="form-error" style="margin-top: 8px;">
+          <template v-if="isBroadcast">
+            <div v-for="(appPreview, aId) in broadcastPreviewMap" :key="aId" style="margin-bottom: 12px;">
+              <p class="field-label" style="margin-bottom: 4px;">App: {{ apps.find(a => a.id === aId)?.name ?? aId }}</p>
+              <table class="table" style="font-size: var(--t-xs);">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Platform</th>
+                    <th>Devices</th>
+                    <th>Credentials</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="g in appPreview?.byGroup ?? []" :key="`${aId}-${g.provider}-${g.platform}`">
+                    <td>{{ g.provider }}</td>
+                    <td>{{ g.platform }}</td>
+                    <td>{{ g.count }}</td>
+                    <td>
+                      <span class="badge" :class="g.credentialReady ? 'badge-ok' : 'badge-danger'">
+                        {{ g.credentialReady ? 'Ready' : 'Not ready' }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+          <template v-else>
+            <p class="field-label" style="margin-bottom: 8px;">Recipient breakdown</p>
+            <table class="table" style="font-size: var(--t-xs);">
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Platform</th>
+                  <th>Devices</th>
+                  <th>Credentials</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="g in previewResult.byGroup" :key="`${g.provider}-${g.platform}`">
+                  <td>{{ g.provider }}</td>
+                  <td>{{ g.platform }}</td>
+                  <td>{{ g.count }}</td>
+                  <td>
+                    <span class="badge" :class="g.credentialReady ? 'badge-ok' : 'badge-danger'">
+                      {{ g.credentialReady ? 'Ready' : 'Not ready' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+          <p v-if="!previewResult.withinLimit" class="callout" role="alert" style="margin-top: 8px;">
             Payload exceeds the 4 KB limit ({{ previewResult.totalBytes }} bytes). Reduce your title, body, or data.
           </p>
           <p v-else class="text-muted" style="margin-top: 8px; font-size: var(--t-xs);">

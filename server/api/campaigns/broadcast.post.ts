@@ -45,6 +45,15 @@ export default defineEventHandler(async (event) => {
   const body = parsed.data;
 
   const broadcastId = crypto.randomUUID();
+
+  // Broadcast only supports 'all' or filter-only 'segment' (no audience_id, no device_ids/tokens)
+  if (body.recipients.type === 'tokens') {
+    throw createError({ statusCode: 422, statusMessage: 'Broadcast does not support type "tokens"' });
+  }
+  if (body.recipients.type === 'segment' && body.recipients.audience_id) {
+    throw createError({ statusCode: 422, statusMessage: 'Broadcast does not support audience_id; use a filter instead' });
+  }
+
   const campaignIds: string[] = [];
 
   const targetValue = {

@@ -240,6 +240,53 @@ describe('PATCH /api/devices/:id — set tags', () => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /api/devices/:id — scope check (FIX 3)
+// ---------------------------------------------------------------------------
+describe('PATCH /api/devices/:id — scope check', () => {
+  it('allows patching a device that belongs to app B (different active company)', async () => {
+    const [d] = await db.insert(devices).values({
+      appId: appBId,
+      provider: 'fcm',
+      platform: 'android',
+      token: 'SCOPE_APPB_PATCH_001',
+    }).returning();
+
+    const res = await fetch(`/api/devices/${d.id}`, {
+      method: 'PATCH',
+      body: { tags: ['patched'] },
+    });
+    expect(res.tags).toEqual(['patched']);
+  });
+
+  it('returns 404 when the device company is archived (not visible) on PATCH', async () => {
+    const { companies: companiesTable, apps: appsTable } = await import('~~/server/db/schema');
+    const { eq: eqOp } = await import('drizzle-orm');
+
+    const [d] = await db.insert(devices).values({
+      appId: appBId,
+      provider: 'fcm',
+      platform: 'android',
+      token: 'SCOPE_PATCH_ARCHIVED_001',
+    }).returning();
+
+    // Archive app B's company.
+    const [appB] = await db.select({ companyId: appsTable.companyId }).from(appsTable).where(eqOp(appsTable.id, appBId));
+    await db.update(companiesTable).set({ status: 'archived' }).where(eqOp(companiesTable.id, appB!.companyId));
+
+    await expect(
+      fetch(`/api/devices/${d.id}`, {
+        method: 'PATCH',
+        body: { tags: ['blocked'] },
+      }),
+    ).rejects.toMatchObject({ statusCode: 404 });
+
+    // Tags must not have changed.
+    const [after] = await db.select().from(devices).where(eqOp(devices.id, d.id));
+    expect(after!.tags).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // DELETE /api/devices/:id
 // ---------------------------------------------------------------------------
 describe('DELETE /api/devices/:id — auth', () => {

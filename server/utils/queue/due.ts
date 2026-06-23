@@ -11,9 +11,15 @@ export async function sweepDueCampaigns(now = new Date()): Promise<number> {
   const rows = (due.rows ?? due) as { id: string }[];
   let n = 0;
   for (const { id } of rows) {
-    await enqueueCampaign(id);
-    await db.update(campaigns).set({ status: 'sending' }).where(and(eq(campaigns.id, id), eq(campaigns.status, 'scheduled')));
-    n++;
+    // Guard: only enqueue when the status flip succeeds (prevents cancel race)
+    const updated = await db.update(campaigns)
+      .set({ status: 'sending' })
+      .where(and(eq(campaigns.id, id), eq(campaigns.status, 'scheduled')))
+      .returning({ id: campaigns.id });
+    if (updated.length > 0) {
+      await enqueueCampaign(id);
+      n++;
+    }
   }
   return n;
 }

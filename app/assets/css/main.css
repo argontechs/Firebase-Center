@@ -726,3 +726,23 @@ textarea.mono {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* ── Filter bar (targets / history / audiences pages) ──────── */
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-input {
+  width: auto;
+  min-width: 220px;
+}
+
+/* ── Form errors ─────────────────────────────────────────────── */
+.form-error {
+  font-size: var(--t-sm);
+  color: var(--danger);
+  margin-top: 4px;
+}

@@ -4,6 +4,7 @@ import { previewAudience } from '~~/server/utils/campaigns/audience';
 import { validatePayloadSize, validateHuaweiClickAction, PayloadTooLargeError } from '~~/server/utils/payload';
 import { enqueueCampaign } from '~~/server/utils/queue/enqueue';
 import { audit } from '~~/server/utils/audit';
+import { filterForTarget } from '~~/server/utils/audiences/resolve';
 import type { NeutralMessage, Provider } from '~~/server/utils/push/types';
 
 export interface CreateCampaignOpts {
@@ -74,6 +75,13 @@ export async function createCampaign(opts: CreateCampaignOpts): Promise<CreateCa
     }
   }
 
+  // Snapshot audience filter at campaign creation time to avoid audience drift at enqueue time.
+  let resolvedTargetValue = targetValue;
+  if (targetType === 'segment' && targetValue.audience_id && !targetValue.filter) {
+    const filter = await filterForTarget(appId, targetValue);
+    resolvedTargetValue = { ...targetValue, filter };
+  }
+
   // Determine if this is a future-scheduled campaign.
   const now = new Date();
   const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
@@ -89,7 +97,7 @@ export async function createCampaign(opts: CreateCampaignOpts): Promise<CreateCa
       mode,
       priority,
       targetType,
-      targetValueJsonb: targetValue,
+      targetValueJsonb: resolvedTargetValue,
       providerScope,
       status: 'scheduled',
       scheduledAt: scheduledDate,
@@ -117,7 +125,7 @@ export async function createCampaign(opts: CreateCampaignOpts): Promise<CreateCa
     mode,
     priority,
     targetType,
-    targetValueJsonb: targetValue,
+    targetValueJsonb: resolvedTargetValue,
     providerScope,
     status: 'queued',
     broadcastId: broadcastId ?? undefined,
