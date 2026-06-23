@@ -5,6 +5,7 @@ import { appCredentials, apps, companies, users, auditLog } from '~/server/db/sc
 import { decryptSecret } from '~/server/utils/crypto';
 import { saveCredential } from '~/server/utils/credentials/save';
 import { rotateMasterKey } from '~/server/utils/credentials/rotate-master-key';
+import { resetDb } from '~/server/test/db';
 import { eq } from 'drizzle-orm';
 
 // Ensure the master key is set for local/CI non-Docker runs.
@@ -16,11 +17,7 @@ const saJson = JSON.stringify({ project_id: 'proj-1', private_key: SENTINEL });
 const v1Key = process.env.NUXT_BO_MASTER_KEY!;          // "1:<b64>"
 
 beforeEach(async () => {
-  await db.delete(auditLog); await db.delete(appCredentials);
-  await db.delete(apps); await db.delete(companies);
-  const { sessions } = await import('~/server/db/schema');
-  await db.delete(sessions);
-  await db.delete(users);
+  await resetDb();
   const [u] = await db.insert(users).values({ email: 'admin@x.io', passwordHash: 'h', role: 'admin' }).returning();
   userId = u.id;
   const [c] = await db.insert(companies).values({ name: 'Acme' }).returning();
