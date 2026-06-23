@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from '~/server/db/client';
-import { appCredentials, apps, companies, users, auditLog } from '~/server/db/schema';
+import { appCredentials, apps, companies, users, auditLog, devices } from '~/server/db/schema';
 import { decryptSecret } from '~/server/utils/crypto';
 import { eq } from 'drizzle-orm';
 import { saveCredential } from '~/server/utils/credentials/save';
@@ -14,6 +14,7 @@ let userId = '';
 beforeEach(async () => {
   await db.delete(auditLog);
   await db.delete(appCredentials);
+  await db.delete(devices);
   await db.delete(apps);
   await db.delete(companies);
   // sessions FK references users, so clear sessions first
