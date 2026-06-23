@@ -15,6 +15,31 @@ const appsData = ref([
   { id: 'app-2', name: 'App Beta', companyId: 'c1' },
 ]);
 
+const audiencesData = [
+  {
+    id: 'aud-1',
+    appId: 'app-1',
+    name: 'VIP Android',
+    platform: 'android',
+    provider: 'fcm',
+    tag: 'vip',
+    count: 1,
+    createdBy: null,
+    createdAt: '2024-01-01T00:00:00Z',
+  },
+  {
+    id: 'aud-2',
+    appId: 'app-1',
+    name: 'All iOS',
+    platform: 'ios',
+    provider: 'fcm',
+    tag: null,
+    count: 42,
+    createdBy: null,
+    createdAt: '2024-01-01T00:00:00Z',
+  },
+];
+
 const previewResult = ref({
   byGroup: [
     { provider: 'fcm', platform: 'android', count: 5, credentialReady: true },
@@ -34,7 +59,7 @@ vi.stubGlobal('useFetch', (url: string | (() => string), _opts?: unknown) => {
   return { data: ref(null), refresh: vi.fn() };
 });
 
-// $fetch stub — used for preview and send mutations + CSRF.
+// $fetch stub — used for preview, send mutations, audiences list, and CSRF.
 vi.stubGlobal(
   '$fetch',
   vi.fn().mockImplementation(async (url: string, _opts?: unknown) => {
@@ -42,6 +67,7 @@ vi.stubGlobal(
     if (url === '/api/campaigns/preview') return previewResult.value;
     if (url === '/api/campaigns') return { campaignId: 'new-camp-1', jobsCreated: 8 };
     if (url === '/api/campaigns/broadcast') return { broadcastId: 'bcast-1', campaignIds: ['c1'] };
+    if (typeof url === 'string' && url.includes('/audiences')) return audiencesData;
     return {};
   }),
 );
@@ -105,6 +131,7 @@ beforeEach(() => {
     if (url === '/api/campaigns/preview') return previewResult.value;
     if (url === '/api/campaigns') return { campaignId: 'new-camp-1', jobsCreated: 8 };
     if (url === '/api/campaigns/broadcast') return { broadcastId: 'bcast-1', campaignIds: ['c1'] };
+    if (typeof url === 'string' && url.includes('/audiences')) return audiencesData;
     return {};
   });
 });
@@ -221,5 +248,79 @@ describe('send page', () => {
 
     const sendBtn = wrapper.find('[data-test="send-submit"]');
     expect(sendBtn.text()).toContain('Schedule');
+  });
+
+  it('shows audience-select dropdown (not UUID text input) when recipients=audience is chosen', async () => {
+    const wrapper = await mountPage();
+
+    // Select an app first
+    await wrapper.find('[data-test="app-select"]').setValue('app-1');
+    await nextTick();
+
+    // Switch to audience mode
+    await wrapper.find('[data-test="recipients-mode"]').setValue('audience');
+    await nextTick();
+    await flushPromises();
+    await nextTick();
+
+    // Should render the select, not the UUID text input
+    expect(wrapper.find('[data-test="audience-select"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="audience-id-input"]').exists()).toBe(false);
+  });
+
+  it('audience-select has one option per stubbed audience with name label', async () => {
+    const wrapper = await mountPage();
+
+    await wrapper.find('[data-test="app-select"]').setValue('app-1');
+    await nextTick();
+    await wrapper.find('[data-test="recipients-mode"]').setValue('audience');
+    await nextTick();
+    await flushPromises();
+    await nextTick();
+
+    const select = wrapper.find('[data-test="audience-select"]');
+    const options = select.findAll('option');
+    // First option is the placeholder, then one per stubbed audience
+    const audienceOptions = options.filter((o) => o.attributes('value') && o.attributes('value') !== '');
+    expect(audienceOptions).toHaveLength(audiencesData.length);
+    expect(audienceOptions[0].text()).toContain('VIP Android');
+    expect(audienceOptions[1].text()).toContain('All iOS');
+  });
+
+  it('selecting an audience drives a segment send with that audience_id', async () => {
+    const wrapper = await mountPage();
+
+    await wrapper.find('[data-test="app-select"]').setValue('app-1');
+    await nextTick();
+    await wrapper.find('[data-test="recipients-mode"]').setValue('audience');
+    await nextTick();
+    await flushPromises();
+    await nextTick();
+
+    // Pick the first audience
+    await wrapper.find('[data-test="audience-select"]').setValue('aud-1');
+    await nextTick();
+
+    // Fill message and preview
+    await wrapper.find('[data-test="send-title"]').setValue('Segment Test');
+    await wrapper.find('[data-test="send-body"]').setValue('Body text');
+    await wrapper.find('[data-test="preview-btn"]').trigger('click');
+    await flushPromises();
+    await nextTick();
+
+    // Submit via form (button is type="submit"; trigger on the form element)
+    await wrapper.find('form').trigger('submit');
+    await flushPromises();
+    await nextTick();
+
+    // Assert $fetch was called with the campaign endpoint and audience_id
+    const calls = (globalThis.$fetch as ReturnType<typeof vi.fn>).mock.calls;
+    // The send composable passes the full SendPayload as body; targetType is a top-level field
+    const sendCall = calls.find(
+      ([url, opts]: [string, { body?: Record<string, unknown> }]) =>
+        url === '/api/campaigns' && opts?.body?.targetType === 'segment',
+    );
+    expect(sendCall).toBeDefined();
+    expect(sendCall[1].body.targetValue).toMatchObject({ audience_id: 'aud-1' });
   });
 });

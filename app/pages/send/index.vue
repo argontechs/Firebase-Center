@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useSend } from '~/composables/useSend';
+import { useAudiences } from '~/composables/useAudiences';
+import type { AudienceRow } from '~/composables/useAudiences';
 
 const route = useRoute();
 
@@ -32,6 +34,48 @@ watch(isBroadcast, (b) => {
 const specificTokens = ref(''); // comma-separated device IDs for 'specific'
 const audienceId = ref('');
 const filterPlatform = ref('');
+
+// Audiences for the selected app (audience mode only)
+const audiencesComposable = useAudiences();
+const audiences = ref<AudienceRow[]>([]);
+const audiencesLoading = ref(false);
+
+async function loadAudiences(appId: string) {
+  if (!appId) {
+    audiences.value = [];
+    return;
+  }
+  audiencesLoading.value = true;
+  try {
+    audiences.value = await audiencesComposable.list(appId);
+  } catch {
+    audiences.value = [];
+  } finally {
+    audiencesLoading.value = false;
+  }
+}
+
+// Reload audiences when selectedAppId changes and audience mode is active
+watch(
+  () => selectedAppId.value,
+  (appId) => {
+    if (recipientsMode.value === 'audience') {
+      audienceId.value = '';
+      loadAudiences(appId);
+    }
+  },
+);
+
+// Also load when switching into audience mode
+watch(
+  () => recipientsMode.value,
+  (mode) => {
+    if (mode === 'audience' && selectedAppId.value) {
+      audienceId.value = '';
+      loadAudiences(selectedAppId.value);
+    }
+  },
+);
 const filterProvider = ref('');
 const filterTag = ref('');
 
@@ -152,6 +196,8 @@ const sendBtnLabel = computed(() => {
 
 const canSubmit = computed(() => {
   if (!previewResult.value || submitting.value) return false;
+  // Audience mode: block if no audience is selected or app has no audiences
+  if (recipientsMode.value === 'audience' && (!audienceId.value || audiences.value.length === 0)) return false;
   if (isBroadcast.value) {
     const previewed = previewedAppIds.value.slice().sort();
     const selected = selectedAppIds.value.slice().sort();
@@ -298,14 +344,30 @@ function toggleAppInBroadcast(id: string) {
 
         <!-- Saved audience -->
         <div v-if="recipientsMode === 'audience'" class="field">
-          <label class="field-label" for="audience-id-input">Audience ID</label>
-          <input
-            id="audience-id-input"
-            v-model="audienceId"
-            type="text"
-            placeholder="Audience UUID"
-            data-test="audience-id-input"
-          />
+          <label class="field-label" for="audience-select">Audience</label>
+          <template v-if="audiencesLoading">
+            <p class="text-muted" style="font-size: var(--t-xs);">Loading audiences...</p>
+          </template>
+          <template v-else-if="audiences.length === 0">
+            <p class="text-muted" style="font-size: var(--t-xs);">
+              No audiences yet for this app.
+              <NuxtLink to="/targets">Create one on the Audiences tab.</NuxtLink>
+            </p>
+          </template>
+          <template v-else>
+            <select
+              id="audience-select"
+              v-model="audienceId"
+              data-test="audience-select"
+            >
+              <option value="">-- Select an audience --</option>
+              <option
+                v-for="a in audiences"
+                :key="a.id"
+                :value="a.id"
+              >{{ a.name }}{{ a.platform || a.tag ? ` — ${[a.platform, a.provider ? `· ${a.provider}` : '', a.tag ? `#${a.tag}` : ''].filter(Boolean).join(' ')} (${a.count})` : ` (${a.count})` }}</option>
+            </select>
+          </template>
         </div>
 
         <!-- Filter mode -->
