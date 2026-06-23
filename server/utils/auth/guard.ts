@@ -5,7 +5,7 @@ import { useRuntimeConfig } from '#imports';
 import { db } from '~~/server/db/client';
 import { users } from '~~/server/db/schema';
 import { readSession, SESSION_COOKIE_NAME } from './session';
-import { verifyDoubleSubmit, verifyOrigin, CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from './csrf';
+import { verifyDoubleSubmit, verifyOrigin, parseAllowedOrigins, CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from './csrf';
 
 // 401 unless a valid (non-expired) session cookie is present.
 export async function requireSession(event: H3Event): Promise<{ userId: string }> {
@@ -27,7 +27,7 @@ export function assertCsrf(event: H3Event): void {
   const cfg = useRuntimeConfig();
   const originOk = verifyOrigin(
     getRequestHeader(event, 'origin') ?? getRequestHeader(event, 'referer'),
-    cfg.allowedOrigins,
+    parseAllowedOrigins(cfg.allowedOrigins),
   );
   const tokenOk = verifyDoubleSubmit(
     getCookie(event, CSRF_COOKIE_NAME),

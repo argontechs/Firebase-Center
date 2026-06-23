@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   issueCsrfToken, serializeCsrfCookie, verifyDoubleSubmit, verifyOrigin,
+  parseAllowedOrigins,
   CSRF_COOKIE_NAME, CSRF_HEADER_NAME,
 } from './csrf';
 
@@ -38,5 +39,38 @@ describe('csrf', () => {
     expect(verifyOrigin('https://bo.example.com/login', allowed)).toBe(true); // referer w/ path
     expect(verifyOrigin('https://evil.com', allowed)).toBe(false);
     expect(verifyOrigin(undefined, allowed)).toBe(false);
+  });
+});
+
+describe('parseAllowedOrigins', () => {
+  it('splits a comma-separated string and trims whitespace', () => {
+    expect(parseAllowedOrigins('https://a.example.com , https://b.example.com')).toEqual([
+      'https://a.example.com',
+      'https://b.example.com',
+    ]);
+  });
+
+  it('handles a single origin string with no commas', () => {
+    expect(parseAllowedOrigins('https://push.example.com')).toEqual(['https://push.example.com']);
+  });
+
+  it('passes through an array unchanged (Array.isArray branch)', () => {
+    const arr = ['https://bo.example.com', 'https://push.example.com'];
+    expect(parseAllowedOrigins(arr)).toBe(arr);
+  });
+
+  it('returns [] for an empty string', () => {
+    expect(parseAllowedOrigins('')).toEqual([]);
+  });
+
+  it('returns [] for undefined', () => {
+    expect(parseAllowedOrigins(undefined)).toEqual([]);
+  });
+
+  it('filters out blank entries from comma-separated string', () => {
+    expect(parseAllowedOrigins('https://a.example.com,,https://b.example.com')).toEqual([
+      'https://a.example.com',
+      'https://b.example.com',
+    ]);
   });
 });

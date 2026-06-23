@@ -4,7 +4,7 @@ import { useRuntimeConfig } from '#imports';
 import { db } from '~~/server/db/client';
 import { users } from '~~/server/db/schema';
 import { readSession, SESSION_COOKIE_NAME } from '~~/server/utils/auth/session';
-import { verifyDoubleSubmit, verifyOrigin, CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from '~~/server/utils/auth/csrf';
+import { verifyDoubleSubmit, verifyOrigin, parseAllowedOrigins, CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from '~~/server/utils/auth/csrf';
 
 const PUBLIC_EXACT = new Set(['/api/auth/login', '/api/auth/csrf', '/healthz']);
 // app-ingest device registration uses bearer-key auth, not the session (design §11).
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
     const cfg = useRuntimeConfig();
     const originOk = verifyOrigin(
       getRequestHeader(event, 'origin') ?? getRequestHeader(event, 'referer'),
-      cfg.allowedOrigins,
+      parseAllowedOrigins(cfg.allowedOrigins),
     );
     const tokenOk = verifyDoubleSubmit(
       getCookie(event, CSRF_COOKIE_NAME),

@@ -20,6 +20,12 @@ export function verifyDoubleSubmit(cookieToken: string | undefined, headerToken:
   return timingSafeEqual(a, b);
 }
 
+// Normalises the runtimeConfig value (string at runtime, array during build/test) to a trimmed,
+// non-empty string[]. Use this at every call site instead of passing cfg.allowedOrigins directly.
+export function parseAllowedOrigins(v: string | string[] | undefined): string[] {
+  return Array.isArray(v) ? v : String(v ?? '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
 export function verifyOrigin(originOrReferer: string | undefined, allowedOrigins: string[]): boolean {
   if (!originOrReferer) return false;
   let origin: string;
