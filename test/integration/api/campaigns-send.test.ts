@@ -50,11 +50,17 @@ afterAll(async () => { await closeDb(); });
 describe('POST /api/campaigns — segment send', () => {
   it('enqueues jobs only for vip-tagged devices', async () => {
     // Seed: two vip devices + one non-vip
-    await db.insert(devices).values([
+    const inserted = await db.insert(devices).values([
       { appId, provider: 'fcm', platform: 'android', token: 'tok_vip1', tags: ['vip'] },
       { appId, provider: 'fcm', platform: 'android', token: 'tok_vip2', tags: ['vip', 'kl'] },
       { appId, provider: 'fcm', platform: 'android', token: 'tok_plain', tags: [] },
-    ]);
+    ]).returning();
+
+    const vipDeviceIds = inserted
+      .filter(d => d.tags.includes('vip'))
+      .map(d => d.id)
+      .sort();
+    const plainDeviceId = inserted.find(d => d.token === 'tok_plain')!.id;
 
     const res = await fetch('/api/campaigns', {
       method: 'POST',
@@ -78,6 +84,11 @@ describe('POST /api/campaigns — segment send', () => {
     // Jobs should have been created
     const j = await db.select().from(jobs).where(eq(jobs.campaignId, res.campaignId));
     expect(j.length).toBeGreaterThan(0);
+
+    // The job's deviceIds must contain exactly the two vip device IDs and NOT the plain device
+    const jobDeviceIds = (j[0].payloadJsonb as { deviceIds: string[] }).deviceIds.slice().sort();
+    expect(jobDeviceIds).toEqual(vipDeviceIds);
+    expect(jobDeviceIds).not.toContain(plainDeviceId);
   });
 
   it('returns jobsCreated:0 for segment with no matching devices', async () => {
