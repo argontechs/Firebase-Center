@@ -218,8 +218,17 @@ describe('history page', () => {
     await flushPromises();
     await nextTick();
 
-    // $fetch should have been called (CSRF + cancel)
-    expect(globalThis.$fetch).toHaveBeenCalled();
+    // First call: CSRF token fetch (no options — useCsrf calls $fetch('/api/auth/csrf') directly)
+    expect(globalThis.$fetch).toHaveBeenCalledWith('/api/auth/csrf');
+
+    // Second call: cancel POST with CSRF header
+    expect(globalThis.$fetch).toHaveBeenCalledWith(
+      '/api/campaigns/camp-2/cancel',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'x-csrf-token': 'csrf-tok' }),
+      }),
+    );
   });
 
   it('shows empty state when no campaigns', async () => {

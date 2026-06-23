@@ -1,14 +1,14 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
 import { eq, sql, desc, inArray } from 'drizzle-orm';
 import { db } from '~~/server/db/client';
-import { campaigns, deliveries } from '~~/server/db/schema';
+import { campaigns, deliveries, apps } from '~~/server/db/schema';
 import { requireSession } from '~~/server/utils/auth/guard';
 
 /**
  * GET /api/campaigns?appId=
  *
  * Returns a summary list of campaigns for a given app, with per-campaign
- * delivery counts (sent, failed, invalid, gave_up, not_ready).
+ * delivery counts (sent, failed, invalid, gave_up, not_ready) and the app name.
  *
  * `not_ready` = deliveries with disposition='CREDENTIAL_NOT_READY' (subset of failed).
  *
@@ -20,7 +20,19 @@ export default defineEventHandler(async (event) => {
   const appId = String(getQuery(event).appId ?? '');
   if (!appId) throw createError({ statusCode: 400, statusMessage: 'appId required' });
 
-  const camps = await db.select().from(campaigns)
+  const camps = await db
+    .select({
+      id: campaigns.id,
+      title: campaigns.title,
+      status: campaigns.status,
+      scheduledAt: campaigns.scheduledAt,
+      broadcastId: campaigns.broadcastId,
+      createdAt: campaigns.createdAt,
+      appId: campaigns.appId,
+      appName: apps.name,
+    })
+    .from(campaigns)
+    .leftJoin(apps, eq(campaigns.appId, apps.id))
     .where(eq(campaigns.appId, appId))
     .orderBy(desc(campaigns.createdAt));
 
@@ -44,6 +56,8 @@ export default defineEventHandler(async (event) => {
     return {
       id: c.id,
       title: c.title,
+      appId: c.appId,
+      appName: c.appName ?? null,
       status: c.status,
       scheduledAt: c.scheduledAt ?? null,
       broadcastId: c.broadcastId ?? null,

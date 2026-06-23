@@ -91,6 +91,7 @@ function statusClass(status: string) {
         <thead>
           <tr>
             <th>Title</th>
+            <th>App</th>
             <th>Status</th>
             <th>When</th>
             <th>Sent</th>
@@ -108,6 +109,7 @@ function statusClass(status: string) {
             data-test="campaign-row"
           >
             <td>{{ c.title }}</td>
+            <td data-test="app-name">{{ c.appName ?? c.appId ?? '--' }}</td>
             <td>
               <span
                 class="badge"
@@ -132,7 +134,7 @@ function statusClass(status: string) {
               <span v-else class="text-faint">--</span>
             </td>
             <td>
-              <span v-if="c.counts?.invalid > 0" class="badge badge-warn" data-test="count-badge">{{ c.counts.invalid }} invalid</span>
+              <span v-if="c.counts?.invalid > 0" class="badge badge-danger" data-test="count-badge">{{ c.counts.invalid }} invalid</span>
               <span v-else class="text-faint">--</span>
             </td>
             <td>
