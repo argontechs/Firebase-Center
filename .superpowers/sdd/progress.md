@@ -63,3 +63,9 @@
 - Bugs found & fixed during the screenshot tour: app.vue missing <NuxtLayout> (sidebar never rendered); root / 404 (added redirect to /companies); sidebar nav pointed at nonexistent /compose,/history (now Sites + Import credentials); app-detail [id].vue was a "Coming soon" placeholder shadowing the real per-app pages (wired tabs -> NuxtPage + default-tab redirect).
 - README.md written for handoff (clone-to-run, provider setup, APIs, deploy, backup, security).
 - Polished screenshot tour delivered (login, sites, apps, compose, devices, credentials).
+
+## PUSH SEND & TARGETS — Phase 1 (backend) complete 2026-06-23
+- A1 devices.tags + audiences table + campaign scheduling/broadcast cols (commits 4dc3966c..f0c610da; fixed: snapshot gap + idempotent ADD COLUMN). Migration runner now applies enum-add (0005) before enum-using DDL (0006) outside a single txn.
+- B1 shared audience resolver (7e105d4e). B2 segment branch in enqueue+preview (f6ff226a).
+- C1 audiences CRUD + live counts (40351aa2). D1 GET /api/devices (3bc25cff). D2 manual add+tag edit+delete (efabdd72..f7de9a6b; fixed delete tenant scope). D3 import tags column (b5321d33).
+- GATE: build PASS, suite GREEN — 544 passed, 1 skipped. Minor findings (dead imports, filterOf dup x3, mislabeled audience test, missing previewAudience segment+scope test) → final review.
