@@ -5,6 +5,7 @@ export interface ColumnMapping {
   provider?: string;             // source column name for provider (optional => use default)
   platform?: string;             // source column name for platform (optional => use default)
   externalUserId?: string;       // source column name (optional)
+  tags?: string;                 // source column name for tags (optional; split on [;,])
   attributes?: string[];         // source columns folded into attributes_jsonb
 }
 
@@ -19,6 +20,7 @@ export interface ParsedRow {
   provider: string | null;
   platform: string | null;
   externalUserId: string | null;
+  tags: string[];                // parsed from optional tags column; defaults to []
   attributes: Record<string, string>;
 }
 
@@ -30,6 +32,11 @@ function pick(record: Record<string, unknown>, col: string | undefined): string 
   if (v === undefined || v === null) return null;
   const s = String(v).trim();
   return s === '' ? null : s;
+}
+
+function parseTags(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw.split(/[;,]/).map((t) => t.trim()).filter((t) => t.length > 0);
 }
 
 function toRow(
@@ -49,6 +56,7 @@ function toRow(
     provider: pick(record, mapping.provider) ?? defaults.provider ?? null,
     platform: pick(record, mapping.platform) ?? defaults.platform ?? null,
     externalUserId: pick(record, mapping.externalUserId),
+    tags: parseTags(pick(record, mapping.tags)),
     attributes,
   };
 }

@@ -9,6 +9,7 @@ export interface ValidRow {
   provider: Provider;
   platform: DevicePlatform;
   externalUserId: string | null;
+  tags: string[];
   attributes: Record<string, string>;
 }
 
@@ -65,6 +66,7 @@ export function validateRows(rows: ParsedRow[]): ValidationResult {
       provider,
       platform,
       externalUserId: row.externalUserId,
+      tags: row.tags,
       attributes: row.attributes,
     });
   }

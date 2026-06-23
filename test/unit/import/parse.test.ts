@@ -8,8 +8,8 @@ describe('parseImport CSV', () => {
     const csv = 'tok,prov,plat,uid\nabc,fcm,android,u1\ndef,huawei,huawei,u2\n';
     const rows = parseImport(csv, 'csv', mapping, {});
     expect(rows).toEqual([
-      { rowNumber: 1, token: 'abc', provider: 'fcm', platform: 'android', externalUserId: 'u1', attributes: {} },
-      { rowNumber: 2, token: 'def', provider: 'huawei', platform: 'huawei', externalUserId: 'u2', attributes: {} },
+      { rowNumber: 1, token: 'abc', provider: 'fcm', platform: 'android', externalUserId: 'u1', tags: [], attributes: {} },
+      { rowNumber: 2, token: 'def', provider: 'huawei', platform: 'huawei', externalUserId: 'u2', tags: [], attributes: {} },
     ]);
   });
 });
@@ -34,6 +34,7 @@ describe('parseImport defaults & JSON', () => {
     const rows = parseImport(json, 'json', { token: 'tok', provider: 'prov', platform: 'plat', attributes: ['country', 'app_version'] }, {});
     expect(rows[0]).toEqual({
       rowNumber: 1, token: 'abc', provider: 'fcm', platform: 'ios', externalUserId: null,
+      tags: [],
       attributes: { country: 'MY', app_version: '1.2' },
     });
   });
