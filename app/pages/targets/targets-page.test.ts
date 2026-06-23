@@ -10,6 +10,7 @@ import { mount } from '@vue/test-utils';
 import { defineComponent, ref, nextTick, h, Suspense } from 'vue';
 
 // --- stub device list ---------------------------------------------------
+// Tokens are already masked by the API (format: first6...last6).
 const devicesData = ref({
   devices: [
     {
@@ -17,7 +18,7 @@ const devicesData = ref({
       appId: 'a1',
       provider: 'fcm',
       platform: 'android',
-      token: 'ABCDEF123456token789XYZ',
+      token: 'ABCDEF…89XYZ',
       externalUserId: null,
       tags: ['vip', 'kl'],
       status: 'active',
@@ -29,7 +30,7 @@ const devicesData = ref({
       appId: 'a1',
       provider: 'huawei',
       platform: 'huawei',
-      token: 'HMSdef456token789abc',
+      token: 'HMSdef…89abc',
       externalUserId: 'user-42',
       tags: [],
       status: 'active',
@@ -96,7 +97,7 @@ beforeEach(() => {
         appId: 'a1',
         provider: 'fcm',
         platform: 'android',
-        token: 'ABCDEF123456token789XYZ',
+        token: 'ABCDEF…89XYZ',
         externalUserId: null,
         tags: ['vip', 'kl'],
         status: 'active',
@@ -108,7 +109,7 @@ beforeEach(() => {
         appId: 'a1',
         provider: 'huawei',
         platform: 'huawei',
-        token: 'HMSdef456token789abc',
+        token: 'HMSdef…89abc',
         externalUserId: 'user-42',
         tags: [],
         status: 'active',
@@ -137,10 +138,12 @@ describe('targets page', () => {
   it('shows a masked token in the device row', async () => {
     const wrapper = await mountPage();
     const rows = wrapper.findAll('[data-test="device-row"]');
-    // At least one row must contain a token — exact format is the component's choice
-    // (it may already be masked by the API); we just verify it's not empty.
-    expect(rows[0]!.text()).not.toBe('');
-    expect(rows[1]!.text()).not.toBe('');
+    // The API returns already-masked tokens in format "first6...last6" with an ellipsis.
+    // Assert the first <td> of each row contains the masked token with the ellipsis character.
+    const firstRowToken = rows[0]!.find('td');
+    expect(firstRowToken.text()).toContain('…');
+    const secondRowToken = rows[1]!.find('td');
+    expect(secondRowToken.text()).toContain('…');
   });
 
   it('renders an app filter element', async () => {
@@ -168,10 +171,46 @@ describe('targets page', () => {
     expect(wrapper.find('[data-test="save-target-btn"]').exists()).toBe(true);
   });
 
-  it('renders a Bulk import link', async () => {
+  it('renders a Bulk import link pointing to /imports/devices', async () => {
     const wrapper = await mountPage();
-    // There should be a link/button referencing the import wizard
     const importLink = wrapper.find('[data-test="bulk-import-link"]');
     expect(importLink.exists()).toBe(true);
+    // Must point to the device import wizard, not the credential importer
+    expect(importLink.attributes('href')).toBe('/imports/devices');
+  });
+
+  it('renders an Edit button in each device row', async () => {
+    const wrapper = await mountPage();
+    const rows = wrapper.findAll('[data-test="device-row"]');
+    // Every row should contain an Edit action
+    for (const row of rows) {
+      expect(row.find('[data-test="edit-device-btn"]').exists()).toBe(true);
+    }
+  });
+
+  it('reveals an inline tag-edit form when Edit is clicked', async () => {
+    const wrapper = await mountPage();
+    const firstRow = wrapper.find('[data-test="device-row"]');
+    await firstRow.find('[data-test="edit-device-btn"]').trigger('click');
+    await nextTick();
+    // Inline tag edit input should appear
+    expect(wrapper.find('[data-test="edit-tags-input"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="save-tags-btn"]').exists()).toBe(true);
+  });
+
+  it('calls setTags and refreshes when tags are saved', async () => {
+    const wrapper = await mountPage();
+    const firstRow = wrapper.find('[data-test="device-row"]');
+    await firstRow.find('[data-test="edit-device-btn"]').trigger('click');
+    await nextTick();
+
+    const tagsInput = wrapper.find('[data-test="edit-tags-input"]');
+    await tagsInput.setValue('vip, promo');
+    await wrapper.find('[data-test="save-tags-btn"]').trigger('click');
+    await nextTick();
+    await nextTick();
+
+    // $fetch was called for CSRF token and then for the PATCH
+    expect(globalThis.$fetch).toHaveBeenCalled();
   });
 });

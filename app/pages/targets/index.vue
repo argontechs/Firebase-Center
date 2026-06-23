@@ -41,6 +41,11 @@ const newExternalUserId = ref('');
 const formError = ref('');
 const saving = ref(false);
 
+// Inline edit state (tag editing per row)
+const editingId = ref<string | null>(null);
+const editTagsInput = ref('');
+const editSaving = ref(false);
+
 const devicesComposable = useDevices();
 
 async function applyFilter() {
@@ -92,6 +97,28 @@ async function saveTarget() {
 async function deleteDevice(id: string) {
   await devicesComposable.remove(id);
   await refresh();
+}
+
+function startEdit(d: { id: string; tags: string[] }) {
+  editingId.value = d.id;
+  editTagsInput.value = d.tags.join(', ');
+}
+
+function cancelEdit() {
+  editingId.value = null;
+  editTagsInput.value = '';
+}
+
+async function saveTags(id: string) {
+  editSaving.value = true;
+  try {
+    await devicesComposable.setTags(id, formatTags(editTagsInput.value));
+    editingId.value = null;
+    editTagsInput.value = '';
+    await refresh();
+  } finally {
+    editSaving.value = false;
+  }
 }
 
 function formatDate(d: string | null) {
@@ -263,13 +290,40 @@ function formatDate(d: string | null) {
               <td>{{ d.platform }}</td>
               <td>{{ d.provider }}</td>
               <td>
-                <span
-                  v-for="tag in d.tags"
-                  :key="tag"
-                  class="badge badge-muted"
-                  style="margin-right: 4px;"
-                >{{ tag }}</span>
-                <span v-if="!d.tags || d.tags.length === 0" class="text-faint">--</span>
+                <!-- Inline tag edit mode -->
+                <template v-if="editingId === d.id">
+                  <div class="cluster" style="gap: 6px;">
+                    <input
+                      v-model="editTagsInput"
+                      type="text"
+                      placeholder="vip, kl"
+                      data-test="edit-tags-input"
+                      style="flex: 1; min-width: 120px;"
+                    />
+                    <button
+                      type="button"
+                      class="btn btn-primary"
+                      :disabled="editSaving"
+                      data-test="save-tags-btn"
+                      @click="saveTags(d.id)"
+                    >{{ editSaving ? 'Saving...' : 'Save' }}</button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      data-test="cancel-edit-btn"
+                      @click="cancelEdit"
+                    >Cancel</button>
+                  </div>
+                </template>
+                <template v-else>
+                  <span
+                    v-for="tag in d.tags"
+                    :key="tag"
+                    class="badge badge-muted"
+                    style="margin-right: 4px;"
+                  >{{ tag }}</span>
+                  <span v-if="!d.tags || d.tags.length === 0" class="text-faint">--</span>
+                </template>
               </td>
               <td>
                 <span
@@ -281,6 +335,12 @@ function formatDate(d: string | null) {
               <td class="text-muted">{{ formatDate(d.createdAt) }}</td>
               <td>
                 <div class="cluster" style="justify-content: flex-end;">
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    data-test="edit-device-btn"
+                    @click="startEdit(d)"
+                  >Edit</button>
                   <button
                     type="button"
                     class="btn btn-danger"
