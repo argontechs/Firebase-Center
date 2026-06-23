@@ -279,3 +279,55 @@ describe('DELETE /api/devices/:id — success', () => {
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 });
+
+// ---------------------------------------------------------------------------
+// DELETE /api/devices/:id — scope check (D2 Step 3)
+//
+// Under the flat-RBAC model every operator can see all active companies, so a
+// device belonging to app B (a different company) is still deletable. The scope
+// check must reject devices whose company is archived (not visible).
+// ---------------------------------------------------------------------------
+describe('DELETE /api/devices/:id — scope check', () => {
+  it('allows deleting a device that belongs to app B (different active company)', async () => {
+    const [d] = await db.insert(devices).values({
+      appId: appBId,
+      provider: 'fcm',
+      platform: 'android',
+      token: 'SCOPE_APPB_DEL_001',
+    }).returning();
+
+    // Flat-RBAC: operator can delete any device whose company is active.
+    const res = await fetch(`/api/devices/${d.id}`, { method: 'DELETE' });
+    expect(res).toBeUndefined(); // 204 No Content
+
+    const rows = await db.select().from(devices).where(eq(devices.id, d.id));
+    expect(rows).toHaveLength(0);
+  });
+
+  it('returns 404 when the device company is archived (not visible)', async () => {
+    const { companies: companiesTable } = await import('~~/server/db/schema');
+    const { eq: eqOp } = await import('drizzle-orm');
+
+    // Seed a device under app B, then archive app B's company.
+    const [d] = await db.insert(devices).values({
+      appId: appBId,
+      provider: 'fcm',
+      platform: 'android',
+      token: 'SCOPE_ARCHIVED_001',
+    }).returning();
+
+    // Retrieve app B's company id so we can archive it.
+    const { apps: appsTable } = await import('~~/server/db/schema');
+    const [appB] = await db.select({ companyId: appsTable.companyId }).from(appsTable).where(eqOp(appsTable.id, appBId));
+    await db.update(companiesTable).set({ status: 'archived' }).where(eqOp(companiesTable.id, appB!.companyId));
+
+    // Scope check must block: company no longer visible.
+    await expect(
+      fetch(`/api/devices/${d.id}`, { method: 'DELETE' }),
+    ).rejects.toMatchObject({ statusCode: 404 });
+
+    // Device must still exist (not deleted).
+    const rows = await db.select().from(devices).where(eqOp(devices.id, d.id));
+    expect(rows).toHaveLength(1);
+  });
+});
