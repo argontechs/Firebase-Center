@@ -45,6 +45,8 @@ export default defineEventHandler(async (event) => {
       id: c.id,
       title: c.title,
       status: c.status,
+      scheduledAt: c.scheduledAt ?? null,
+      broadcastId: c.broadcastId ?? null,
       createdAt: c.createdAt,
       counts: {
         sent: Number(r?.sent ?? 0),
