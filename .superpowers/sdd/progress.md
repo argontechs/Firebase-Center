@@ -74,3 +74,9 @@
 - E1 segment sends + scheduledAt on POST /api/campaigns (e94bee02; fixed: test now asserts non-match exclusion). E2 broadcast + createCampaign extract (5f7bf2f1). E3 cancel scheduled (cb3471f6). F1 due-campaign sweep timer (f802aa6e).
 - GATE: build PASS, suite GREEN — 562 passed, 1 skipped. Gate also fixed pre-existing FK-ordering bug in credentials-save.test.ts teardown.
 - Minor findings → final review: cancel.post.ts SELECT-then-UPDATE (non-atomic, operator-driven, low risk); due.ts enqueue+status non-txn (idempotent); broadcast audit not asserted in test; dead imports in cancel/audience tests.
+
+## PUSH SEND & TARGETS — Phase 3 (UI) complete 2026-06-23
+- G1 nav (Targets/Send/History) + per-app tabs reduced to Credentials+Ingest keys; deleted per-app compose/devices/history pages; quick links (7f5aac39..1db66392). G2 Targets page + manual add + /imports/devices wizard home (641768d4..3b8eb68e). G3 Audiences tab + count endpoint (e4c30c1d..8a32b7a0). G4 Send page single/broadcast/audience/schedule + GET /api/apps/all (212c91f5..ee38b142). G5 History page scheduled/broadcast/counts/cancel (99667fc7..b2412df8).
+- Each task had blocking findings caught + fixed (deletion via sandbox, missing Edit action, bulk-import link, count-endpoint test, CSRF assertions, nested panel, badge-danger).
+- Controller fix: credentials-read-rotate + master-key-rotation teardown → resetDb() (the 7 Phase-3-gate failures were stale-DB FK violations from manual db.delete cleanups).
+- SUITE GREEN: 615 passed, 1 skipped. Build PASS. Next: visual verify + final whole-branch review (merge-base 425f7ce8).
